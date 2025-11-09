@@ -7,6 +7,23 @@ const cookieParser = require("cookie-parser");
 const { Server } = require("socket.io");
 const path = require("path");
 
+// Optionally disable console output on the server when DISABLE_CONSOLE is set
+try {
+  if (process.env.DISABLE_CONSOLE === "true") {
+    ["log", "info", "warn", "error", "debug"].forEach((m) => {
+      try {
+        global.__origConsole = global.__origConsole || {};
+        global.__origConsole[m] = console[m];
+      } catch (e) {
+        // ignore
+      }
+      console[m] = () => {};
+    });
+  }
+} catch (e) {
+  // ignore
+}
+
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users2");
 const postRoutes = require("./routes/posts");
@@ -20,31 +37,41 @@ const MONGO = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/snapgram";
 const app = express();
 const server = http.createServer(app);
 
-// CORS origin configuration - support localhost, local network IPs, and production
-const getAllowedOrigins = () => {
-  const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+// CORS origin configuration - allow a whitelist and also common localhost dev origins.
+// This uses a dynamic origin check so requests from your local dev server
+// (e.g. http://localhost:5173) will be accepted even when this server runs
+// with FRONTEND_ORIGIN set to your deployed Vercel URL.
+const parseEnvOrigins = () => {
+  // Support comma-separated list in FRONTEND_ORIGINS or single FRONTEND_ORIGIN
+  const raw = process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || "";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
 
-  // In development, allow localhost and local network access
-  if (process.env.NODE_ENV !== "production") {
-    return [
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "http://127.0.0.1:5173",
-      "http://127.0.0.1:3000",
-      /^http:\/\/192\.168\.\d+\.\d+:5173$/, // Allow any 192.168.x.x with port 5173
-      /^http:\/\/192\.168\.\d+\.\d+:3000$/, // Allow any 192.168.x.x with port 3000
-      /^http:\/\/10\.\d+\.\d+\.\d+:5173$/, // Allow any 10.x.x.x with port 5173
-      /^http:\/\/10\.\d+\.\d+\.\d+:3000$/, // Allow any 10.x.x.x with port 3000
-      frontendOrigin,
-    ];
-  }
+const defaultLocalOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+];
 
-  // Production - use specific origin
-  return frontendOrigin;
+const whitelist = [...defaultLocalOrigins, ...parseEnvOrigins()];
+
+const originIsAllowed = (origin) => {
+  if (!origin) return true; // allow non-browser requests (curl, server-to-server)
+  return whitelist.some((w) => {
+    if (w instanceof RegExp) return w.test(origin);
+    return w === origin;
+  });
 };
 
 const corsOptions = {
-  origin: getAllowedOrigins(),
+  origin: (origin, callback) => {
+    if (originIsAllowed(origin)) return callback(null, true);
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
