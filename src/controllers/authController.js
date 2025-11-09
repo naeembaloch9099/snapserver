@@ -38,6 +38,22 @@ const getCookieOptions = () => {
   };
 };
 
+// Minimal, resilient logger that bypasses the console-silencer in `index.js` when present.
+const authLog = (...args) => {
+  try {
+    if (
+      global &&
+      global.__origConsole &&
+      typeof global.__origConsole.log === "function"
+    ) {
+      return global.__origConsole.log("[AUTH]", ...args);
+    }
+  } catch (e) {
+    // ignore
+  }
+  // fallback
+  console.log("[AUTH]", ...args);
+};
 // --- Route Handlers ---
 
 const register = async (req, res) => {
@@ -65,6 +81,18 @@ const register = async (req, res) => {
 
     user.refreshTokens.push({ tokenHash: refresh, createdAt: new Date() });
     await user.save(); // ✅ [FIXED] Use the new dynamic cookie options
+
+    // Log incoming cookies and the refresh token we are about to set
+    authLog(
+      "register - incoming Cookie header:",
+      req.headers && req.headers.cookie
+    );
+    authLog(
+      "register - setting refreshToken (partial):",
+      refresh?.slice?.(0, 10),
+      "...",
+      getCookieOptions()
+    );
 
     res.cookie("refreshToken", refresh, getCookieOptions());
 
@@ -111,6 +139,18 @@ const login = async (req, res) => {
     user.refreshTokens.push({ tokenHash: refresh, createdAt: new Date() });
     await user.save(); // ✅ [FIXED] Use the new dynamic cookie options
 
+    // Log incoming cookies and the refresh token we are about to set
+    authLog(
+      "login - incoming Cookie header:",
+      req.headers && req.headers.cookie
+    );
+    authLog(
+      "login - setting refreshToken (partial):",
+      refresh?.slice?.(0, 10),
+      "...",
+      getCookieOptions()
+    );
+
     res.cookie("refreshToken", refresh, getCookieOptions());
 
     return res.json({
@@ -140,7 +180,14 @@ const refresh = async (req, res) => {
   try {
     const token = req.cookies.refreshToken;
 
+    // Log incoming cookie header for debugging
+    authLog(
+      "refresh - incoming Cookie header:",
+      req.headers && req.headers.cookie
+    );
+
     if (!token) {
+      authLog("refresh - no refresh token present in cookies");
       return res.status(401).json({ error: "No refresh token" });
     }
 
@@ -178,6 +225,12 @@ const refresh = async (req, res) => {
     const access = signAccess(updatedUser);
 
     // Set rotated refresh cookie
+    authLog(
+      "refresh - setting rotated refreshToken (partial):",
+      newRefresh?.slice?.(0, 10),
+      "...",
+      getCookieOptions()
+    );
     res.cookie("refreshToken", newRefresh, getCookieOptions());
 
     return res.json({
@@ -234,6 +287,16 @@ const logout = async (req, res) => {
     } // ✅ [FIXED] Clear the cookie using the *exact same* options it was set with
 
     const cookieOptions = getCookieOptions(); // To clear a cookie, you set maxAge to a past or zero value
+
+    authLog(
+      "logout - incoming Cookie header:",
+      req.headers && req.headers.cookie
+    );
+    authLog(
+      "logout - clearing refreshToken cookie with options:",
+      cookieOptions
+    );
+
     res.clearCookie("refreshToken", {
       httpOnly: cookieOptions.httpOnly,
       secure: cookieOptions.secure,
