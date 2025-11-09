@@ -144,47 +144,63 @@ const refresh = async (req, res) => {
       return res.status(401).json({ error: "No refresh token" });
     }
 
-    const payload = jwt.verify(
-      token,
-      process.env.JWT_REFRESH_SECRET || "refresh-secret"
+    let payload;
+    try {
+      payload = jwt.verify(
+        token,
+        process.env.JWT_REFRESH_SECRET || "refresh-secret"
+      );
+    } catch (err) {
+      // invalid or expired token
+      return res.status(401).json({ error: "Invalid refresh token" });
+    }
+
+    // Perform atomic rotation: remove the old token and insert the new one
+    const newRefresh = signRefresh();
+
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: payload.sub, "refreshTokens.tokenHash": token },
+      {
+        $pull: { refreshTokens: { tokenHash: token } },
+        $push: {
+          refreshTokens: { tokenHash: newRefresh, createdAt: new Date() },
+        },
+      },
+      { new: true }
     );
 
-    const user = await User.findById(payload.sub);
-    if (!user) {
-      return res.status(401).json({ error: "User not found" });
-    } // Check if token is in the database
-
-    const found = user.refreshTokens.find((r) => r.tokenHash === token);
-    if (!found) {
+    if (!updatedUser) {
+      // token was not found (already rotated/removed) or user missing
       return res.status(401).json({ error: "Refresh token not recognized" });
-    } // --- Token Rotation ---
+    }
 
-    const access = signAccess(user);
-    const newRefresh = signRefresh(user); // Remove old token, add new token
+    // Issue a new access token
+    const access = signAccess(updatedUser);
 
-    user.refreshTokens = user.refreshTokens.filter(
-      (r) => r.tokenHash !== token
-    );
-    user.refreshTokens.push({ tokenHash: newRefresh, createdAt: new Date() });
-    await user.save(); // ✅ [FIXED] Use the new dynamic cookie options
-
+    // Set rotated refresh cookie
     res.cookie("refreshToken", newRefresh, getCookieOptions());
 
     return res.json({
       access,
       user: {
-        id: user._id,
-        _id: user._id,
-        username: user.username,
-        name: user.name,
-        profilePic: user.profilePic,
-        bio: user.bio,
-        isPrivate: user.isPrivate,
-        followersCount: user.followers ? user.followers.length : 0,
-        followingCount: user.following ? user.following.length : 0,
-        followers: user.followers ? user.followers : [],
-        following: user.following ? user.following : [],
-        followRequests: user.followRequests ? user.followRequests : [],
+        id: updatedUser._id,
+        _id: updatedUser._id,
+        username: updatedUser.username,
+        name: updatedUser.name,
+        profilePic: updatedUser.profilePic,
+        bio: updatedUser.bio,
+        isPrivate: updatedUser.isPrivate,
+        followersCount: updatedUser.followers
+          ? updatedUser.followers.length
+          : 0,
+        followingCount: updatedUser.following
+          ? updatedUser.following.length
+          : 0,
+        followers: updatedUser.followers ? updatedUser.followers : [],
+        following: updatedUser.following ? updatedUser.following : [],
+        followRequests: updatedUser.followRequests
+          ? updatedUser.followRequests
+          : [],
       },
     });
   } catch (e) {
