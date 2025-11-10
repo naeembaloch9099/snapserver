@@ -36,23 +36,35 @@ const getFeed = async (req, res) => {
     );
 
     // Populate owner including privacy/followers so we can filter private accounts
-    const postsRaw = await Post.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .populate(
-        "owner",
-        "username displayName avatar profilePic isPrivate followers"
-      )
-      .populate({
-        path: "comments",
-        populate: {
-          path: "user",
-          select: "username displayName avatar profilePic",
-        },
-      })
-      .lean()
-      .exec();
+    // Use server-side Redis cache to avoid hitting MongoDB on every request for
+    // the public feed. Cache key is based on page & limit.
+    const { getCached } = require("../cache");
+    const cacheKey = `posts:feed:page:${page}:limit:${limit}`;
+
+    const postsRaw = await getCached(
+      cacheKey,
+      async () => {
+        const rows = await Post.find()
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit))
+          .populate(
+            "owner",
+            "username displayName avatar profilePic isPrivate followers"
+          )
+          .populate({
+            path: "comments",
+            populate: {
+              path: "user",
+              select: "username displayName avatar profilePic",
+            },
+          })
+          .lean()
+          .exec();
+        return rows;
+      },
+      60 * 5 // cache for 5 minutes
+    );
 
     console.log(`📥 [getFeed] Found ${postsRaw.length} posts from database`);
     console.log("[getFeed] Post with populated comments:", {
