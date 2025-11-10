@@ -12,6 +12,18 @@ function setIo(io) {
     socket.on("authenticate", (userId) => {
       console.log("User authenticated, joining room:", String(userId));
       socket.join(String(userId));
+      // Debug: list current rooms for this socket and the adapter state for this user room
+      try {
+        console.log("Socket rooms for", socket.id, Array.from(socket.rooms));
+        const room = _io.sockets.adapter.rooms.get(String(userId));
+        console.log(
+          "Adapter room for user",
+          String(userId),
+          room ? Array.from(room) : null
+        );
+      } catch (e) {
+        console.warn("Error logging adapter rooms", e);
+      }
     });
 
     socket.on("join-room", (roomId) => {
@@ -29,6 +41,17 @@ function setIo(io) {
             callOffer.caller.username
           } to user room: ${String(recipientId)}`
         );
+        // Debug: check whether recipient room exists and which sockets are in it
+        try {
+          const room = _io.sockets.adapter.rooms.get(String(recipientId));
+          console.log(
+            "call:start - recipient room present:",
+            !!room,
+            room ? Array.from(room) : []
+          );
+        } catch (e) {
+          console.warn("Error checking recipient room", e);
+        }
         _io.to(String(recipientId)).emit("call:incoming", callOffer);
       } catch (e) {
         console.warn("Error relaying call:start", e);
