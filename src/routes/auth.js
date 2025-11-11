@@ -486,6 +486,33 @@ router.post("/logout", async (req, res) => {
   }
 });
 
+// change password (authenticated)
+router.post("/password", require("../middleware/auth"), async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body || {};
+    if (!oldPassword || !newPassword)
+      return res.status(400).json({ error: "Missing fields" });
+    if (String(newPassword).length < 6)
+      return res.status(400).json({ error: "Password too short" });
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const ok = await bcrypt.compare(String(oldPassword), user.passwordHash);
+    if (!ok)
+      return res.status(400).json({ error: "Current password incorrect" });
+
+    const hash = await bcrypt.hash(String(newPassword), 10);
+    user.passwordHash = hash;
+    await user.save();
+
+    return res.json({ ok: true, message: "Password changed" });
+  } catch (e) {
+    console.error("[CHANGE PASSWORD] Error:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // delete account (requires authentication)
 router.delete("/account", require("../middleware/auth"), async (req, res) => {
   try {
