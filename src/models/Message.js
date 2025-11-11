@@ -16,6 +16,7 @@ const MessageSchema = new Schema(
       default: null,
     },
     mediaUrl: { type: String }, // URL to the media file
+    postRef: { type: Schema.Types.ObjectId, ref: "Post" }, // optional reference to a Post when a post is shared
     seen: { type: Boolean, default: false },
   },
   { timestamps: true }

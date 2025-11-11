@@ -3,6 +3,7 @@ const Message = require("../models/Message");
 const Notification = require("../models/Notification");
 // --- FIX: Import the emitter, not the notifier ---
 const emitter = require("../events/eventEmitter");
+const Post = require("../models/Post");
 
 const getOrCreateConversation = async (req, res) => {
   try {
@@ -112,6 +113,7 @@ const sendMessage = async (req, res) => {
       media: mediaTypeFromClient,
       mediaUrl: bodyMediaUrl,
       fileName,
+      postId,
     } = req.body;
     const uploadedFile = req.file; // The file from multer
 
@@ -120,6 +122,7 @@ const sendMessage = async (req, res) => {
       text,
       media: mediaTypeFromClient, // This is the string "image", "video", etc.
       fileName,
+      postId,
       file: uploadedFile ? uploadedFile.filename : undefined,
       userId: req.user._id,
     });
@@ -133,7 +136,7 @@ const sendMessage = async (req, res) => {
     // **FIX 1: CORRECTED VALIDATION**
     // Check for actual content: text, an uploaded file, or a manually provided URL
     // ---
-    if (!text && !uploadedFile && !bodyMediaUrl) {
+    if (!text && !uploadedFile && !bodyMediaUrl && !postId) {
       console.error("❌ Missing text, file, and mediaUrl");
       return res
         .status(400)
@@ -144,6 +147,31 @@ const sendMessage = async (req, res) => {
 
     let resolvedMediaUrl = null;
     let resolvedMediaType = null;
+    let referencedPost = null;
+
+    // If a postId was provided and no explicit file/url is supplied, resolve media from the post
+    if (postId && !uploadedFile && !bodyMediaUrl) {
+      try {
+        referencedPost = await Post.findById(postId).lean();
+        if (referencedPost) {
+          resolvedMediaUrl =
+            referencedPost.image || referencedPost.video || null;
+          resolvedMediaType =
+            referencedPost.type ||
+            (referencedPost.image
+              ? "image"
+              : referencedPost.video
+              ? "video"
+              : null);
+        }
+      } catch (e) {
+        console.warn(
+          "Failed to resolve post for postId",
+          postId,
+          e && e.message ? e.message : e
+        );
+      }
+    }
 
     if (uploadedFile) {
       // Build absolute URL
@@ -187,14 +215,14 @@ const sendMessage = async (req, res) => {
           : ""),
       media: resolvedMediaType, // Use the new, more reliable type
       mediaUrl: resolvedMediaUrl, // Use the new URL
+      postRef: postId || undefined,
     });
 
     console.log("✅ Message created:", msg._id);
 
-    const populatedMsg = await Message.findById(msg._id).populate(
-      "sender",
-      "username displayName avatar profilePic"
-    );
+    const populatedMsg = await Message.findById(msg._id)
+      .populate("sender", "username displayName avatar profilePic")
+      .populate("postRef", "caption image video type owner");
 
     console.log("✅ Message populated, sending to others...");
 
