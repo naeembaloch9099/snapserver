@@ -17,6 +17,13 @@ const MessageSchema = new Schema(
     },
     mediaUrl: { type: String }, // URL to the media file
     postRef: { type: Schema.Types.ObjectId, ref: "Post" }, // optional reference to a Post when a post is shared
+    postSnapshot: {
+      // embedded snapshot of post at share time (so preview persists even if post is deleted)
+      caption: { type: String },
+      image: { type: String },
+      video: { type: String },
+      type: { type: String, enum: ["image", "video", null] },
+    },
     seen: { type: Boolean, default: false },
   },
   { timestamps: true }

@@ -39,6 +39,7 @@ const listConversations = async (req, res) => {
           .sort({ createdAt: -1 })
           .limit(50)
           .populate("sender", "username displayName avatar profilePic")
+          .populate("postRef", "caption image video type owner")
           .lean();
 
         const unreadCount = conv.unreadCounts?.[req.user._id.toString()] || 0;
@@ -68,6 +69,7 @@ const getMessages = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit))
       .populate("sender", "username displayName avatar profilePic")
+      .populate("postRef", "caption image video type owner")
       .lean();
     res.json(messages.reverse());
   } catch (e) {
@@ -204,6 +206,17 @@ const sendMessage = async (req, res) => {
       resolvedMediaType = null;
     }
 
+    // Create a snapshot of the post at send time (so preview persists even if post is deleted later)
+    let postSnapshot = null;
+    if (referencedPost) {
+      postSnapshot = {
+        caption: referencedPost.caption || "",
+        image: referencedPost.image || null,
+        video: referencedPost.video || null,
+        type: referencedPost.type || "image",
+      };
+    }
+
     const msg = await Message.create({
       conversation: conversationId,
       sender: req.user._id,
@@ -216,6 +229,7 @@ const sendMessage = async (req, res) => {
       media: resolvedMediaType, // Use the new, more reliable type
       mediaUrl: resolvedMediaUrl, // Use the new URL
       postRef: postId || undefined,
+      postSnapshot: postSnapshot || undefined, // Store snapshot at send time
     });
 
     console.log("✅ Message created:", msg._id);
