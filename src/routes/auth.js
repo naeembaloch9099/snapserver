@@ -4,6 +4,9 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
 const PendingUser = require("../models/PendingUser");
+// ✅ FIX: Moved node-fetch require to the top for consistency and better practice.
+// If your Node.js environment supports native fetch, you can remove this line.
+const fetch = require("node-fetch");
 
 const router = express.Router();
 
@@ -26,9 +29,7 @@ const signRefresh = (user) => {
 };
 
 /**
- * ✅ [THE FIX] Creates a consistent set of cookie options.
- * This function is used to set AND clear the cookie,
- * which solves the "zombie cookie" bug.
+ * Creates a consistent set of cookie options.
  */
 const getCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === "production";
@@ -46,9 +47,8 @@ const getCookieOptions = () => {
 router.post("/check-username", async (req, res) => {
   try {
     const { username } = req.body;
-    if (!username) return res.status(400).json({ error: "Username required" });
+    if (!username) return res.status(400).json({ error: "Username required" }); // Validate format
 
-    // Validate format
     const usernameRegex = /^[a-z0-9_.-]+$/;
     if (!usernameRegex.test(username)) {
       return res.json({
@@ -57,9 +57,8 @@ router.post("/check-username", async (req, res) => {
           "Username can only contain lowercase letters, digits, and special characters (. - _). No spaces allowed.",
         suggestions: [],
       });
-    }
+    } // Check if taken
 
-    // Check if taken
     const existing = await User.findOne({ username });
     const pendingExisting = await PendingUser.findOne({ username });
 
@@ -142,9 +141,8 @@ router.post("/register", async (req, res) => {
 
     const existingPending = await PendingUser.findOne({
       $or: [{ username }, { email }],
-    });
+    }); // Validate username format: lowercase, digits, special chars, no spaces
 
-    // Validate username format: lowercase, digits, special chars, no spaces
     const usernameRegex = /^[a-z0-9_.-]+$/;
     if (!usernameRegex.test(username)) {
       return res.status(400).json({
@@ -187,8 +185,7 @@ router.post("/register", async (req, res) => {
         subject: "Verify your SnapGram account",
         text: `Your verification code: ${otp}\n\nThis code will expire in 2 minutes.`,
         html: `<h2>Welcome to SnapGram!</h2><p>Your verification code is: <strong>${otp}</strong></p><p>This code will expire in 2 minutes.</p>`,
-      });
-      // NEVER send OTP in response - only via email
+      }); // NEVER send OTP in response - only via email
       return res.json({ ok: true });
     } catch (mailErr) {
       console.warn("register: mail send failed", mailErr);
@@ -224,8 +221,7 @@ router.post("/forgot", async (req, res) => {
         subject: "Reset your SnapGram password",
         text: `Your OTP: ${otp}\n\nThis code will expire in 2 minutes.`,
         html: `<h2>Password Reset</h2><p>Your OTP is: <strong>${otp}</strong></p><p>This code will expire in 2 minutes.</p>`,
-      });
-      // NEVER send OTP in response
+      }); // NEVER send OTP in response
       return res.json({ ok: true });
     } catch (mailErr) {
       console.warn("forgot: mail send failed", mailErr);
@@ -313,7 +309,7 @@ router.post("/verify", async (req, res) => {
     const access = signAccess(newUser);
     const refresh = signRefresh(newUser);
     newUser.refreshTokens.push({ tokenHash: refresh, createdAt: new Date() });
-    await newUser.save(); // ✅ [FIX] Use the consistent cookie options
+    await newUser.save();
 
     res.cookie("refreshToken", refresh, getCookieOptions());
 
@@ -354,7 +350,7 @@ router.post("/login", async (req, res) => {
     const access = signAccess(user);
     const refresh = signRefresh(user);
     user.refreshTokens.push({ tokenHash: refresh, createdAt: new Date() });
-    await user.save(); // ✅ [FIX] Use the consistent cookie options
+    await user.save();
 
     res.cookie("refreshToken", refresh, getCookieOptions()); // Return the full user object for the AuthContext
 
@@ -423,7 +419,7 @@ router.post("/refresh", async (req, res) => {
       (r) => r.tokenHash !== token
     );
     user.refreshTokens.push({ tokenHash: refresh, createdAt: new Date() });
-    await user.save(); // ✅ [FIX] Use the consistent cookie options
+    await user.save();
 
     res.cookie("refreshToken", refresh, getCookieOptions()); // Return the full user object for the AuthContext
 
@@ -472,11 +468,8 @@ router.post("/logout", async (req, res) => {
       }
     }
     /**
-     * ✅ [THE BUG FIX]
      * Clear the cookie using the exact same options it was set with.
-     * This will now reliably delete the cookie from the browser.
      */
-
     res.clearCookie("refreshToken", getCookieOptions());
 
     return res.json({ ok: true });
@@ -528,13 +521,11 @@ router.delete("/account", require("../middleware/auth"), async (req, res) => {
     const username = user.username;
     console.log(`👤 [DELETE ACCOUNT] Username: ${username}`);
 
-    const Post = require("../models/Post");
-    // ✅ FIX: Use owner: userId (ObjectId) not username
+    const Post = require("../models/Post"); // FIX: Use owner: userId (ObjectId) not username
     const deletedPosts = await Post.deleteMany({ owner: userId });
     console.log(`📝 [DELETE] Deleted ${deletedPosts.deletedCount} posts`);
 
-    const Comment = require("../models/Comment");
-    // ✅ FIX: Use user: userId (field name in Comment model is 'user' not 'author')
+    const Comment = require("../models/Comment"); // FIX: Use user: userId (field name in Comment model is 'user' not 'author')
     const deletedComments = await Comment.deleteMany({ user: userId });
     console.log(`💬 [DELETE] Deleted ${deletedComments.deletedCount} comments`);
 
@@ -584,7 +575,7 @@ router.delete("/account", require("../middleware/auth"), async (req, res) => {
 
     await User.findByIdAndDelete(userId);
     console.log(`✅ [DELETE] User account deleted: ${username}`);
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"); // ✅ [FIX] Also clear the cookie here
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     res.clearCookie("refreshToken", getCookieOptions());
 
@@ -600,53 +591,54 @@ router.delete("/account", require("../middleware/auth"), async (req, res) => {
 
 // --- Facebook OAuth (client-side token exchange) ---
 // Expects { accessToken } from the Facebook JS SDK (client-side).
-// Server validates the token with Facebook, fetches basic profile info,
-// then finds or creates a local user and issues our JWT tokens.
 router.post("/facebook", async (req, res) => {
   try {
     const { accessToken } = req.body || {};
     if (!accessToken)
       return res.status(400).json({ error: "Missing accessToken" });
 
-    const FB_APP_ID = process.env.FB_APP_ID || "733259775786990";
-    const FB_APP_SECRET =
-      process.env.FB_APP_SECRET || "388d2afac7ec338882f03c979fc91815";
+    const FB_APP_ID = process.env.FB_APP_ID;
+    const FB_APP_SECRET = process.env.FB_APP_SECRET;
 
-    // 1) Validate token using debug_token with App Access Token
+    if (!FB_APP_ID || !FB_APP_SECRET) {
+      console.error(
+        "/auth/facebook error: FB_APP_ID or FB_APP_SECRET environment variables are missing."
+      );
+      return res
+        .status(500)
+        .json({ error: "Server misconfigured for Facebook login" });
+    } // 1) Validate token using debug_token with App Access Token
+
     const appAccessToken = `${FB_APP_ID}|${FB_APP_SECRET}`;
     const debugUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(
       accessToken
-    )}&access_token=${encodeURIComponent(appAccessToken)}`;
+    )}&access_token=${encodeURIComponent(appAccessToken)}`; // ✅ FIX: Use the imported 'fetch' function directly
 
-    const fetchFn = require("node-fetch");
-    const debugResp = await fetchFn(debugUrl).then((r) => r.json());
+    const debugResp = await fetch(debugUrl).then((r) => r.json());
     console.debug("[FB DEBUG TOKEN RESPONSE]", JSON.stringify(debugResp));
 
     if (!debugResp || !debugResp.data || !debugResp.data.is_valid) {
       return res.status(401).json({ error: "Invalid Facebook token" });
-    }
+    } // Ensure token was issued for our app
 
-    // Ensure token was issued for our app
     if (String(debugResp.data.app_id) !== String(FB_APP_ID)) {
       return res.status(401).json({ error: "Facebook token app mismatch" });
     }
 
-    const fbUserId = debugResp.data.user_id;
+    const fbUserId = debugResp.data.user_id; // 2) Fetch user profile from Graph API
 
-    // 2) Fetch user profile from Graph API
     const profileUrl = `https://graph.facebook.com/${fbUserId}?fields=id,name,email,picture.width(400).height(400)&access_token=${encodeURIComponent(
       accessToken
-    )}`;
-    const profile = await fetchFn(profileUrl).then((r) => r.json());
+    )}`; // ✅ FIX: Use the imported 'fetch' function directly
+    const profile = await fetch(profileUrl).then((r) => r.json());
     console.debug("[FB PROFILE]", JSON.stringify(profile));
 
     if (!profile || !profile.id) {
       return res
         .status(500)
         .json({ error: "Failed to fetch Facebook profile" });
-    }
+    } // 3) Find or create user
 
-    // 3) Find or create user
     let user = await User.findOne({
       $or: [{ facebookId: profile.id }, { email: profile.email }],
     });
@@ -680,8 +672,7 @@ router.post("/facebook", async (req, res) => {
       });
     } else {
       // ensure facebookId is set
-      if (!user.facebookId) user.facebookId = profile.id;
-      // update profile pic/name if missing
+      if (!user.facebookId) user.facebookId = profile.id; // update profile pic/name if missing
       if (!user.profilePic && profile.picture?.data?.url)
         user.profilePic = profile.picture.data.url;
       if (!user.name && profile.name) user.name = profile.name;
@@ -689,9 +680,8 @@ router.post("/facebook", async (req, res) => {
         facebook: profile,
       });
       await user.save();
-    }
+    } // 4) Issue our tokens (access + refresh) and set refresh cookie
 
-    // 4) Issue our tokens (access + refresh) and set refresh cookie
     const access = signAccess(user);
     const refresh = signRefresh(user);
 
