@@ -598,20 +598,123 @@ router.delete("/account", require("../middleware/auth"), async (req, res) => {
   }
 });
 
-// --- Placeholder Facebook OAuth endpoint
-// This endpoint is a placeholder. When you provide Facebook app credentials
-// we will implement server-side token exchange and user lookup here.
+// --- Facebook OAuth (client-side token exchange) ---
+// Expects { accessToken } from the Facebook JS SDK (client-side).
+// Server validates the token with Facebook, fetches basic profile info,
+// then finds or creates a local user and issues our JWT tokens.
 router.post("/facebook", async (req, res) => {
   try {
     const { accessToken } = req.body || {};
-    if (!accessToken) {
+    if (!accessToken)
       return res.status(400).json({ error: "Missing accessToken" });
+
+    const FB_APP_ID = process.env.FB_APP_ID || "733259775786990";
+    const FB_APP_SECRET =
+      process.env.FB_APP_SECRET || "388d2afac7ec338882f03c979fc91815";
+
+    // 1) Validate token using debug_token with App Access Token
+    const appAccessToken = `${FB_APP_ID}|${FB_APP_SECRET}`;
+    const debugUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(
+      accessToken
+    )}&access_token=${encodeURIComponent(appAccessToken)}`;
+
+    const fetchFn = global.fetch || require("node-fetch");
+    const debugResp = await fetchFn(debugUrl).then((r) => r.json());
+
+    if (!debugResp || !debugResp.data || !debugResp.data.is_valid) {
+      return res.status(401).json({ error: "Invalid Facebook token" });
     }
 
-    // For now, return a 501 Not Implemented with guidance for configuration.
-    return res.status(501).json({
-      error:
-        "Facebook login not configured on server. Provide APP ID/SECRET and implement token exchange.",
+    // Ensure token was issued for our app
+    if (String(debugResp.data.app_id) !== String(FB_APP_ID)) {
+      return res.status(401).json({ error: "Facebook token app mismatch" });
+    }
+
+    const fbUserId = debugResp.data.user_id;
+
+    // 2) Fetch user profile from Graph API
+    const profileUrl = `https://graph.facebook.com/${fbUserId}?fields=id,name,email,picture.width(400).height(400)&access_token=${encodeURIComponent(
+      accessToken
+    )}`;
+    const profile = await fetchFn(profileUrl).then((r) => r.json());
+
+    if (!profile || !profile.id) {
+      return res
+        .status(500)
+        .json({ error: "Failed to fetch Facebook profile" });
+    }
+
+    // 3) Find or create user
+    let user = await User.findOne({
+      $or: [{ facebookId: profile.id }, { email: profile.email }],
+    });
+
+    if (!user) {
+      // create unique username from name
+      const base =
+        (profile.name || "user")
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "")
+          .slice(0, 12) || `fbuser${Math.floor(Math.random() * 10000)}`;
+      let username = base;
+      let i = 0;
+      while (await User.findOne({ username })) {
+        i += 1;
+        username = `${base}${i}`;
+      }
+
+      const randomPassword = crypto.randomBytes(16).toString("hex");
+      const hash = await bcrypt.hash(randomPassword, 10);
+
+      user = await User.create({
+        username,
+        email: profile.email || `fb-${profile.id}@facebook.local`,
+        passwordHash: hash,
+        name: profile.name,
+        profilePic: profile.picture?.data?.url,
+        verified: true,
+        facebookId: profile.id,
+        providerData: { facebook: profile },
+      });
+    } else {
+      // ensure facebookId is set
+      if (!user.facebookId) user.facebookId = profile.id;
+      // update profile pic/name if missing
+      if (!user.profilePic && profile.picture?.data?.url)
+        user.profilePic = profile.picture.data.url;
+      if (!user.name && profile.name) user.name = profile.name;
+      user.providerData = Object.assign({}, user.providerData || {}, {
+        facebook: profile,
+      });
+      await user.save();
+    }
+
+    // 4) Issue our tokens (access + refresh) and set refresh cookie
+    const access = signAccess(user);
+    const refresh = signRefresh(user);
+
+    user.refreshTokens = user.refreshTokens || [];
+    user.refreshTokens.push({ tokenHash: refresh, createdAt: new Date() });
+    await user.save();
+
+    res.cookie("refreshToken", refresh, getCookieOptions());
+
+    return res.json({
+      access,
+      user: {
+        id: user._id,
+        _id: user._id,
+        username: user.username,
+        name: user.name,
+        profilePic: user.profilePic,
+        bio: user.bio,
+        isPrivate: user.isPrivate,
+        followersCount: user.followers ? user.followers.length : 0,
+        followingCount: user.following ? user.following.length : 0,
+        followers: user.followers || [],
+        following: user.following || [],
+        followRequests: user.followRequests || [],
+      },
     });
   } catch (e) {
     console.error("/auth/facebook error", e);

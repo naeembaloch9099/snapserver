@@ -25,6 +25,9 @@ const UserSchema = new Schema(
     verifyOTPExpires: { type: Date },
     resetOTP: { type: String },
     resetOTPExpires: { type: Date },
+    // OAuth providers
+    facebookId: { type: String, index: true, sparse: true },
+    providerData: { type: Schema.Types.Mixed },
   },
   { timestamps: true }
 );
