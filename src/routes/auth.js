@@ -618,8 +618,9 @@ router.post("/facebook", async (req, res) => {
       accessToken
     )}&access_token=${encodeURIComponent(appAccessToken)}`;
 
-    const fetchFn = global.fetch || require("node-fetch");
+    const fetchFn = require("node-fetch");
     const debugResp = await fetchFn(debugUrl).then((r) => r.json());
+    console.debug("[FB DEBUG TOKEN RESPONSE]", JSON.stringify(debugResp));
 
     if (!debugResp || !debugResp.data || !debugResp.data.is_valid) {
       return res.status(401).json({ error: "Invalid Facebook token" });
@@ -637,6 +638,7 @@ router.post("/facebook", async (req, res) => {
       accessToken
     )}`;
     const profile = await fetchFn(profileUrl).then((r) => r.json());
+    console.debug("[FB PROFILE]", JSON.stringify(profile));
 
     if (!profile || !profile.id) {
       return res
