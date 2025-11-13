@@ -4,8 +4,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
 const PendingUser = require("../models/PendingUser");
-// ✅ FIX: Moved node-fetch require to the top for consistency and better practice.
-// If your Node.js environment supports native fetch, you can remove this line.
+// FIX: Moved node-fetch require to the top for consistency and better practice.
 const fetch = require("node-fetch");
 
 const router = express.Router();
@@ -612,7 +611,7 @@ router.post("/facebook", async (req, res) => {
     const appAccessToken = `${FB_APP_ID}|${FB_APP_SECRET}`;
     const debugUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(
       accessToken
-    )}&access_token=${encodeURIComponent(appAccessToken)}`; // ✅ FIX: Use the imported 'fetch' function directly
+    )}&access_token=${encodeURIComponent(appAccessToken)}`; // FIX: Use the imported 'fetch' function directly
 
     const debugResp = await fetch(debugUrl).then((r) => r.json());
     console.debug("[FB DEBUG TOKEN RESPONSE]", JSON.stringify(debugResp));
@@ -629,7 +628,7 @@ router.post("/facebook", async (req, res) => {
 
     const profileUrl = `https://graph.facebook.com/${fbUserId}?fields=id,name,email,picture.width(400).height(400)&access_token=${encodeURIComponent(
       accessToken
-    )}`; // ✅ FIX: Use the imported 'fetch' function directly
+    )}`; // FIX: Use the imported 'fetch' function directly
     const profile = await fetch(profileUrl).then((r) => r.json());
     console.debug("[FB PROFILE]", JSON.stringify(profile));
 
