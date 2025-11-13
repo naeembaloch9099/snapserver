@@ -29,6 +29,7 @@ const userRoutes = require("./routes/users2");
 const postRoutes = require("./routes/posts");
 const messageRoutes = require("./routes/messages");
 const notificationRoutes = require("./routes/notifications");
+const legalRoutes = require("./routes/legal");
 const { initSockets } = require("./sockets");
 
 const PORT = process.env.PORT || 4000;
@@ -94,6 +95,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/legal", legalRoutes);
 
 // basic health
 app.get("/api/health", (req, res) => res.json({ ok: true }));

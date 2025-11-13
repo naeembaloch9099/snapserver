@@ -598,4 +598,25 @@ router.delete("/account", require("../middleware/auth"), async (req, res) => {
   }
 });
 
+// --- Placeholder Facebook OAuth endpoint
+// This endpoint is a placeholder. When you provide Facebook app credentials
+// we will implement server-side token exchange and user lookup here.
+router.post("/facebook", async (req, res) => {
+  try {
+    const { accessToken } = req.body || {};
+    if (!accessToken) {
+      return res.status(400).json({ error: "Missing accessToken" });
+    }
+
+    // For now, return a 501 Not Implemented with guidance for configuration.
+    return res.status(501).json({
+      error:
+        "Facebook login not configured on server. Provide APP ID/SECRET and implement token exchange.",
+    });
+  } catch (e) {
+    console.error("/auth/facebook error", e);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
 module.exports = router;
