@@ -589,10 +589,11 @@ router.delete("/account", require("../middleware/auth"), async (req, res) => {
 });
 
 // --- Facebook OAuth (client-side token exchange) ---
-// Expects { accessToken } from the Facebook JS SDK (client-side).
+// Expects { accessToken, mode } from the Facebook JS SDK (client-side).
+// mode can be 'login' or 'signup'
 router.post("/facebook", async (req, res) => {
   try {
-    const { accessToken } = req.body || {};
+    const { accessToken, mode = "login" } = req.body || {};
     if (!accessToken)
       return res.status(400).json({ error: "Missing accessToken" });
 
@@ -636,14 +637,29 @@ router.post("/facebook", async (req, res) => {
       return res
         .status(500)
         .json({ error: "Failed to fetch Facebook profile" });
-    } // 3) Find or create user
+    } // 3) Find existing user
 
     let user = await User.findOne({
       $or: [{ facebookId: profile.id }, { email: profile.email }],
     });
 
-    if (!user) {
-      // create unique username from name
+    // Handle signup mode - user must not exist
+    if (mode === "signup") {
+      if (user) {
+        // User already exists
+        if (user.facebookId === profile.id) {
+          return res.status(400).json({
+            error:
+              "This Facebook account is already registered. Please log in instead.",
+          });
+        } else {
+          return res.status(400).json({
+            error: `An account with email ${profile.email} already exists. Please log in instead.`,
+          });
+        }
+      }
+
+      // Create new user for signup
       const base =
         (profile.name || "user")
           .toLowerCase()
@@ -670,8 +686,16 @@ router.post("/facebook", async (req, res) => {
         providerData: { facebook: profile },
       });
     } else {
-      // ensure facebookId is set
-      if (!user.facebookId) user.facebookId = profile.id; // update profile pic/name if missing
+      // Handle login mode - user must exist
+      if (!user) {
+        return res.status(404).json({
+          error:
+            "No account found with this Facebook account. Please sign up first.",
+        });
+      }
+
+      // Update existing user
+      if (!user.facebookId) user.facebookId = profile.id;
       if (!user.profilePic && profile.picture?.data?.url)
         user.profilePic = profile.picture.data.url;
       if (!user.name && profile.name) user.name = profile.name;
