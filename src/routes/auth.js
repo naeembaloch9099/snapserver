@@ -653,8 +653,9 @@ router.post("/facebook", async (req, res) => {
               "This Facebook account is already registered. Please log in instead.",
           });
         } else {
+          // User has an account with this email but hasn't linked Facebook yet
           return res.status(400).json({
-            error: `An account with email ${profile.email} already exists. Please log in instead.`,
+            error: `An account with email ${profile.email} already exists. Please log in with your existing account first, then you can link Facebook in settings.`,
           });
         }
       }
@@ -686,7 +687,7 @@ router.post("/facebook", async (req, res) => {
         providerData: { facebook: profile },
       });
     } else {
-      // Handle login mode - user must exist
+      // Handle login mode
       if (!user) {
         return res.status(404).json({
           error:
@@ -694,7 +695,17 @@ router.post("/facebook", async (req, res) => {
         });
       }
 
-      // Update existing user
+      // Check if user found by email but Facebook not linked yet
+      if (!user.facebookId && user.email === profile.email) {
+        // User exists with this email but hasn't linked Facebook
+        // For security, require explicit linking action
+        return res.status(403).json({
+          error: `An account with email ${profile.email} exists but Facebook is not linked. Please log in with your password first, then link Facebook in your account settings.`,
+          requiresLinking: true,
+        });
+      }
+
+      // User exists and Facebook is already linked - allow login
       if (!user.facebookId) user.facebookId = profile.id;
       if (!user.profilePic && profile.picture?.data?.url)
         user.profilePic = profile.picture.data.url;
