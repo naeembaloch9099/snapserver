@@ -48,6 +48,13 @@ const authMiddleware = async (req, res, next) => {
       "-passwordHash -refreshTokens"
     );
     if (!user) return res.status(401).json({ error: "User not found" });
+
+    // CRITICAL: Ensure arrays are always initialized for all users
+    // This prevents "undefined is not an array" errors for Facebook/OAuth users
+    if (!Array.isArray(user.followers)) user.followers = [];
+    if (!Array.isArray(user.following)) user.following = [];
+    if (!Array.isArray(user.followRequests)) user.followRequests = [];
+
     req.user = user;
     next();
   } catch (e) {

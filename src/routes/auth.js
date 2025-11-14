@@ -301,6 +301,11 @@ router.post("/verify", async (req, res) => {
       profilePic: pending.profilePic,
       bio: pending.bio,
       verified: true,
+      // CRITICAL: Initialize arrays for regular signup too
+      followers: [],
+      following: [],
+      followRequests: [],
+      refreshTokens: [],
     });
 
     await PendingUser.deleteOne({ _id: pending._id });
@@ -345,6 +350,12 @@ router.post("/login", async (req, res) => {
 
     if (!user.verified)
       return res.status(403).json({ error: "Account not verified" });
+
+    // CRITICAL: Ensure arrays are initialized for existing users
+    if (!Array.isArray(user.followers)) user.followers = [];
+    if (!Array.isArray(user.following)) user.following = [];
+    if (!Array.isArray(user.followRequests)) user.followRequests = [];
+    if (!Array.isArray(user.refreshTokens)) user.refreshTokens = [];
 
     const access = signAccess(user);
     const refresh = signRefresh(user);
@@ -402,6 +413,13 @@ router.post("/refresh", async (req, res) => {
     }
 
     console.log(`[REFRESH] ✅ User found: ${user.username}`);
+
+    // CRITICAL: Ensure arrays are initialized
+    if (!Array.isArray(user.followers)) user.followers = [];
+    if (!Array.isArray(user.following)) user.following = [];
+    if (!Array.isArray(user.followRequests)) user.followRequests = [];
+    if (!Array.isArray(user.refreshTokens)) user.refreshTokens = [];
+
     const found = user.refreshTokens.find((r) => r.tokenHash === token);
     if (!found) {
       console.log(
@@ -676,15 +694,32 @@ router.post("/facebook", async (req, res) => {
       const randomPassword = crypto.randomBytes(16).toString("hex");
       const hash = await bcrypt.hash(randomPassword, 10);
 
+      console.log(`📝 [FB SIGNUP] Creating new user: ${username}`);
+
       user = await User.create({
         username,
         email: profile.email || `fb-${profile.id}@facebook.local`,
         passwordHash: hash,
         name: profile.name,
+        bio: "",
         profilePic: profile.picture?.data?.url,
+        isPrivate: false,
         verified: true,
         facebookId: profile.id,
         providerData: { facebook: profile },
+        // CRITICAL: Initialize all arrays to prevent undefined errors
+        followers: [],
+        following: [],
+        followRequests: [],
+        refreshTokens: [],
+      });
+
+      console.log(`✅ [FB SIGNUP] User created successfully:`, {
+        id: user._id,
+        username: user.username,
+        hasFollowers: Array.isArray(user.followers),
+        hasFollowing: Array.isArray(user.following),
+        hasFollowRequests: Array.isArray(user.followRequests),
       });
     } else {
       // Handle login mode
@@ -713,6 +748,13 @@ router.post("/facebook", async (req, res) => {
       user.providerData = Object.assign({}, user.providerData || {}, {
         facebook: profile,
       });
+
+      // CRITICAL: Ensure arrays are initialized for existing users
+      if (!Array.isArray(user.followers)) user.followers = [];
+      if (!Array.isArray(user.following)) user.following = [];
+      if (!Array.isArray(user.followRequests)) user.followRequests = [];
+      if (!Array.isArray(user.refreshTokens)) user.refreshTokens = [];
+
       await user.save();
     } // 4) Issue our tokens (access + refresh) and set refresh cookie
 
