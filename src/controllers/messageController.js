@@ -27,35 +27,55 @@ const getOrCreateConversation = async (req, res) => {
 
 const listConversations = async (req, res) => {
   try {
+    console.log("📨 listConversations called for user:", req.user._id);
+
     const convs = await Conversation.find({ participants: req.user._id })
       .sort({ lastMessageAt: -1 })
       .populate("participants", "username displayName avatar profilePic")
       .lean();
 
+    console.log("📨 Found", convs.length, "conversations");
+
     // Populate messages for each conversation and add unread count
     const withMessages = await Promise.all(
       convs.map(async (conv) => {
-        const messages = await Message.find({ conversation: conv._id })
-          .sort({ createdAt: -1 })
-          .limit(50)
-          .populate("sender", "username displayName avatar profilePic")
-          .populate("postRef", "caption image video type owner")
-          .lean();
+        try {
+          const messages = await Message.find({ conversation: conv._id })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .populate("sender", "username displayName avatar profilePic")
+            .populate("postRef", "caption image video type owner")
+            .lean();
 
-        const unreadCount = conv.unreadCounts?.[req.user._id.toString()] || 0;
+          const unreadCount = conv.unreadCounts?.[req.user._id.toString()] || 0;
 
-        return {
-          ...conv,
-          messages: messages.reverse(),
-          unread: unreadCount,
-        };
+          return {
+            ...conv,
+            messages: messages.reverse(),
+            unread: unreadCount,
+          };
+        } catch (msgError) {
+          console.error(
+            "Error loading messages for conversation",
+            conv._id,
+            msgError
+          );
+          // Return conversation without messages if there's an error
+          return {
+            ...conv,
+            messages: [],
+            unread: 0,
+          };
+        }
       })
     );
 
+    console.log("✅ Returning conversations with messages");
     res.json(withMessages);
   } catch (e) {
-    console.warn(e);
-    res.status(500).json({ error: "Server error" });
+    console.error("❌ listConversations error:", e);
+    console.error("Error stack:", e.stack);
+    res.status(500).json({ error: "Server error", details: e.message });
   }
 };
 
