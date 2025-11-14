@@ -146,7 +146,11 @@ const sendMessage = async (req, res) => {
       fileName,
       postId,
       file: uploadedFile ? uploadedFile.filename : undefined,
-      userId: req.user._id,
+      sender: {
+        userId: req.user._id,
+        username: req.user.username,
+        displayName: req.user.displayName,
+      },
     });
 
     if (!conversationId) {
@@ -252,7 +256,12 @@ const sendMessage = async (req, res) => {
       postSnapshot: postSnapshot || undefined, // Store snapshot at send time
     });
 
-    console.log("✅ Message created:", msg._id);
+    console.log("✅ Message created:", {
+      messageId: msg._id,
+      sender: msg.sender,
+      senderUsername: req.user.username,
+      text: msg.text,
+    });
 
     const populatedMsg = await Message.findById(msg._id)
       .populate("sender", "username displayName avatar profilePic")
