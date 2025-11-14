@@ -14,6 +14,47 @@ const router = express.Router();
 // search users by username prefix
 router.get("/search", auth, searchUsers);
 
+// Get random user suggestions
+router.get("/suggestions", auth, async (req, res) => {
+  try {
+    const User = require("../models/User");
+    const limit = parseInt(req.query.limit) || 3;
+    const currentUserId = req.user._id;
+
+    // Get random users excluding current user and already followed users
+    const currentUser = await User.findById(currentUserId);
+    const followingIds = currentUser.following || [];
+
+    const suggestions = await User.aggregate([
+      {
+        $match: {
+          _id: {
+            $ne: currentUserId,
+            $nin: followingIds,
+          },
+          verified: true,
+        },
+      },
+      { $sample: { size: limit } },
+      {
+        $project: {
+          username: 1,
+          name: 1,
+          profilePic: 1,
+          bio: 1,
+          followersCount: { $size: { $ifNull: ["$followers", []] } },
+          isPrivate: 1,
+        },
+      },
+    ]);
+
+    res.json(suggestions);
+  } catch (e) {
+    console.error("GET /users/suggestions error:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // Get current authenticated user's profile
 router.get("/me", auth, async (req, res) => {
   try {
