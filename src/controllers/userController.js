@@ -129,6 +129,12 @@ const followToggle = async (req, res) => {
     const me = await User.findById(req.user._id);
     if (!me) return res.status(401).json({ error: "Not authenticated" });
 
+    // CRITICAL: Prevent users from following themselves
+    if (String(me._id) === String(target._id)) {
+      console.log(`❌ [FOLLOW TOGGLE] User cannot follow themselves`);
+      return res.status(400).json({ error: "You cannot follow yourself" });
+    }
+
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log(`👤 [FOLLOW TOGGLE]`);
     console.log(`📌 From: ${me.username} (${me._id})`);

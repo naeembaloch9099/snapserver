@@ -116,8 +116,22 @@ function setIo(io) {
   emitter.on("message", ({ roomId, message }) => {
     if (!_io) return console.warn("Socket.IO not set, can't emit message");
     try {
+      console.log(`📡 [SOCKET BROADCAST] Emitting message to room: ${roomId}`);
+      console.log(`📊 [SOCKET BROADCAST] Message data:`, {
+        conversation: message.conversation,
+        sender: message.sender,
+        text: message.text?.substring(0, 50),
+      });
+
+      // Check how many sockets are in this room
+      const roomSockets = _io.sockets.adapter.rooms.get(roomId);
+      console.log(
+        `👥 [SOCKET BROADCAST] Sockets in room ${roomId}:`,
+        roomSockets ? roomSockets.size : 0
+      );
+
       _io.to(roomId).emit("message", message);
-      console.log(`Socket: Emitted 'message' to room ${roomId}`);
+      console.log(`✅ [SOCKET BROADCAST] Message emitted to room ${roomId}`);
     } catch (e) {
       console.warn("notifier.emitToRoom (via emitter) error", e);
     }

@@ -10,11 +10,21 @@ function initSockets(io) {
     console.log("socket connected", socket.id);
 
     socket.on("join", ({ room }) => {
-      if (room) socket.join(room);
+      if (room) {
+        socket.join(room);
+        console.log(`✅ Socket ${socket.id} joined room: ${room}`);
+        console.log(
+          `📊 Socket ${socket.id} is now in rooms:`,
+          Array.from(socket.rooms)
+        );
+      }
     });
 
     socket.on("leave", ({ room }) => {
-      if (room) socket.leave(room);
+      if (room) {
+        socket.leave(room);
+        console.log(`❌ Socket ${socket.id} left room: ${room}`);
+      }
     });
 
     socket.on("markSeen", async (payload) => {
