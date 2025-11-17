@@ -64,9 +64,40 @@ async function run() {
     console.log("Found existing test user:", user._id);
   }
 
-  // Skip tesseract.js in this Node test script (worker/runtime complexity).
-  // We'll perform OCR via OCR.Space after upload if OCR_ENABLED=true.
+  // We'll perform OCR via OCR.Space after upload by default.
+  // Optionally run local tesseract.js for debugging if --tesseract flag is provided.
   let extracted = "";
+  const useTesseract = process.argv.includes("--tesseract");
+  if (useTesseract) {
+    try {
+      console.log("Attempting local tesseract OCR with logger...");
+      const { createWorker } = require("tesseract.js");
+      const workerOptions = {};
+      try {
+        workerOptions.corePath = require.resolve(
+          "tesseract.js-core/tesseract-core.js"
+        );
+      } catch (e) {}
+      try {
+        workerOptions.workerPath = require.resolve(
+          "tesseract.js/dist/worker.min.js"
+        );
+      } catch (e) {}
+      const worker = createWorker({
+        logger: (m) => console.log("[tesseract]", m),
+        ...workerOptions,
+      });
+      await worker.load();
+      await worker.loadLanguage("eng");
+      await worker.initialize("eng");
+      const { data } = await worker.recognize(absolute);
+      if (data && data.text) extracted = data.text.trim();
+      console.log("Tesseract extracted length:", (extracted || "").length);
+      await worker.terminate();
+    } catch (tErr) {
+      console.warn("Local tesseract attempt failed:", tErr?.message || tErr);
+    }
+  }
 
   // If input is an SVG, rasterize it to PNG first to improve OCR reliability
   let tempRasterPath = null;
