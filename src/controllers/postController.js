@@ -136,6 +136,17 @@ const createPost = async (req, res) => {
     }
     const post = new Post(payload);
     await post.save();
+    // Invalidate feed cache so newly created post appears for clients
+    try {
+      const { clear } = require("../cache");
+      clear();
+      console.log("🧹 [createPost] Cleared server cache after creating a post");
+    } catch (cacheErr) {
+      console.warn(
+        "[createPost] failed to clear cache:",
+        cacheErr?.message || cacheErr
+      );
+    }
     res.status(201).json(post);
   } catch (e) {
     console.warn(e);
@@ -565,6 +576,17 @@ const updatePost = async (req, res) => {
       })
       .lean();
     res.json(out);
+    // Invalidate feed cache so edited post is reflected immediately
+    try {
+      const { clear } = require("../cache");
+      clear();
+      console.log("🧹 [updatePost] Cleared server cache after updating a post");
+    } catch (cacheErr) {
+      console.warn(
+        "[updatePost] failed to clear cache:",
+        cacheErr?.message || cacheErr
+      );
+    }
   } catch (e) {
     console.warn(e);
     res.status(500).json({ error: "Server error" });
