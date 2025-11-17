@@ -54,6 +54,9 @@ const createPost = async (req, res) => {
         const uploadResult = await uploadFile(localPath, {
           folder: "snapgram/posts",
         });
+        // Save Cloudinary public id so we can delete the remote asset later
+        if (uploadResult && uploadResult.public_id)
+          payload.cloudinaryId = uploadResult.public_id;
         const url = uploadResult.secure_url || uploadResult.url;
         if (uploadResult.resource_type === "video") {
           payload.video = url;
@@ -595,6 +598,36 @@ const deletePost = async (req, res) => {
     );
 
     await Post.deleteOne({ _id: post._id });
+    // Invalidate server-side feed cache so clients get fresh data
+    try {
+      const { clear } = require("../cache");
+      clear();
+      console.log("🧹 [deletePost] Cleared server cache after post deletion");
+    } catch (cacheErr) {
+      console.warn(
+        "[deletePost] failed to clear cache:",
+        cacheErr?.message || cacheErr
+      );
+    }
+
+    // Attempt to delete the Cloudinary asset if we saved the public id
+    try {
+      if (post.cloudinaryId) {
+        const { cloudinary } = require("../services/cloudinary");
+        // resource_type 'auto' will delete images/videos
+        await cloudinary.uploader.destroy(post.cloudinaryId, {
+          resource_type: "auto",
+        });
+        console.log(
+          `🗑️ [deletePost] Removed Cloudinary asset: ${post.cloudinaryId}`
+        );
+      }
+    } catch (cloudErr) {
+      console.warn(
+        "[deletePost] failed to remove cloudinary asset:",
+        cloudErr?.message || cloudErr
+      );
+    }
     return res.json({ ok: true });
   } catch (e) {
     console.warn(e);

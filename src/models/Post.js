@@ -8,6 +8,8 @@ const PostSchema = new Schema(
     // extractedText: optional OCR-extracted text from the image for search/access
     extractedText: { type: String },
     image: { type: String },
+    // Cloudinary public id for the uploaded resource (used for deletions)
+    cloudinaryId: { type: String },
     video: { type: String },
     likes: { type: Number, default: 0 },
     likedBy: [{ type: Schema.Types.ObjectId, ref: "User" }],
