@@ -23,10 +23,7 @@ async function run() {
 
   const MONGO_URI =
     process.env.MONGO_URI || "mongodb://127.0.0.1:27017/snapgram";
-  await mongoose.connect(MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  await mongoose.connect(MONGO_URI);
   console.log("Connected to MongoDB");
 
   // Ensure test user exists (create if missing)
@@ -54,6 +51,31 @@ async function run() {
   // We'll perform OCR via OCR.Space after upload if OCR_ENABLED=true.
   let extracted = "";
 
+  // If input is an SVG, rasterize it to PNG first to improve OCR reliability
+  let tempRasterPath = null;
+  try {
+    const ext = path.extname(absolute || "").toLowerCase();
+    if (ext === ".svg") {
+      try {
+        const sharp = require("sharp");
+        const tmpName = `ocr_${Date.now()}.png`;
+        const os = require("os");
+        tempRasterPath = path.join(os.tmpdir(), tmpName);
+        await sharp(absolute).png().toFile(tempRasterPath);
+        console.log("Rasterized SVG to PNG for OCR:", tempRasterPath);
+        // use rasterized file for upload/ocr
+        absolute = tempRasterPath;
+      } catch (rErr) {
+        console.warn(
+          "SVG rasterization failed, continuing with original file:",
+          rErr?.message || rErr
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("Rasterize check failed:", e?.message || e);
+  }
+
   // Upload to Cloudinary
   let uploadResult;
   try {
@@ -64,6 +86,10 @@ async function run() {
     );
   } catch (e) {
     console.error("Cloudinary upload failed:", e.message || e);
+    if (tempRasterPath)
+      try {
+        fs.unlinkSync(tempRasterPath);
+      } catch (_) {}
     process.exit(3);
   }
   // If OCR is enabled, try OCR.Space on the uploaded URL (avoids tesseract worker issues)
@@ -125,6 +151,10 @@ async function run() {
   } catch (dbErr) {
     console.error("Failed to create post in DB:", dbErr.message || dbErr);
   } finally {
+    if (tempRasterPath)
+      try {
+        fs.unlinkSync(tempRasterPath);
+      } catch (_) {}
     await mongoose.disconnect();
     console.log("Disconnected MongoDB");
   }

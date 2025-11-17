@@ -21,10 +21,7 @@ async function main() {
   }
 
   const MONGO = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/snapgram";
-  await mongoose.connect(MONGO, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  await mongoose.connect(MONGO);
   console.log("Connected to MongoDB");
 
   const User = require("../src/models/User");
