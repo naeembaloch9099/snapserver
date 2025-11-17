@@ -50,26 +50,9 @@ async function run() {
     console.log("Found existing test user:", user._id);
   }
 
-  // Run OCR using tesseract.js
+  // Skip tesseract.js in this Node test script (worker/runtime complexity).
+  // We'll perform OCR via OCR.Space after upload if OCR_ENABLED=true.
   let extracted = "";
-  try {
-    const { createWorker } = require("tesseract.js");
-    // Use local core and worker files so the Node worker doesn't attempt
-    // to `fetch` the wasm/core over the network which can fail in some
-    // environments. These files are provided by the installed packages.
-    const corePath = require.resolve("tesseract.js-core/tesseract-core.js");
-    const workerPath = require.resolve("tesseract.js/dist/worker.min.js");
-    const worker = createWorker({ corePath, workerPath });
-    await worker.load();
-    await worker.loadLanguage("eng");
-    await worker.initialize("eng");
-    const { data } = await worker.recognize(absolute);
-    extracted = data && data.text ? data.text.trim() : "";
-    console.log("OCR extracted text length:", extracted.length);
-    await worker.terminate();
-  } catch (ocrErr) {
-    console.warn("OCR error (continuing):", ocrErr.message || ocrErr);
-  }
 
   // Upload to Cloudinary
   let uploadResult;
@@ -82,6 +65,41 @@ async function run() {
   } catch (e) {
     console.error("Cloudinary upload failed:", e.message || e);
     process.exit(3);
+  }
+  // If OCR is enabled, try OCR.Space on the uploaded URL (avoids tesseract worker issues)
+  try {
+    const OCR_ENABLED = String(process.env.OCR_ENABLED || "false") === "true";
+    if (OCR_ENABLED) {
+      try {
+        const fetch = require("node-fetch");
+        const OCR_SPACE_KEY = process.env.OCR_SPACE_KEY || "helloworld";
+        const form = new URLSearchParams();
+        form.append("apikey", OCR_SPACE_KEY);
+        form.append("url", uploadResult.secure_url || uploadResult.url);
+        form.append("language", "eng");
+        form.append("isOverlayRequired", "false");
+        const resp = await fetch("https://api.ocr.space/parse/imageurl", {
+          method: "POST",
+          body: form,
+          headers: { "User-Agent": "SnapGram-OCR-Test" },
+        });
+        const json = await resp.json();
+        if (json && json.ParsedResults && json.ParsedResults[0]) {
+          const parsed = json.ParsedResults[0];
+          if (parsed.ParsedText && parsed.ParsedText.trim()) {
+            extracted = parsed.ParsedText.trim();
+            console.log("OCR.Space extracted text length:", extracted.length);
+          }
+        }
+      } catch (spaceErr) {
+        console.warn(
+          "OCR.Space fallback failed (continuing):",
+          spaceErr?.message || spaceErr
+        );
+      }
+    }
+  } catch (e) {
+    console.warn("OCR attempt error (continuing):", e?.message || e);
   }
 
   // Create post in DB
