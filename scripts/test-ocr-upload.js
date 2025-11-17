@@ -10,13 +10,30 @@ const User = require("../src/models/User");
 const Post = require("../src/models/Post");
 
 async function run() {
-  const fileArg =
-    process.argv[2] ||
-    path.join(__dirname, "..", "..", "FrontEnd", "src", "assets", "react.svg");
-  const absolute = path.resolve(fileArg);
+  let fileArg = process.argv[2];
+  if (!fileArg) {
+    // default to a repo asset if present
+    fileArg = path.join(
+      __dirname,
+      "..",
+      "..",
+      "FrontEnd",
+      "src",
+      "assets",
+      "test-ocr-image.svg"
+    );
+  }
+  let absolute = path.resolve(fileArg);
   if (!fs.existsSync(absolute)) {
-    console.error("File not found:", absolute);
-    process.exit(2);
+    // if the provided file doesn't exist, create a small SVG and rasterize from it
+    console.log("Input file not found, creating a small test SVG for OCR.");
+    const tmpSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="200"><rect width="100%" height="100%" fill="#ffffff"/><text x="20" y="100" font-family="Arial" font-size="48" fill="#000000">Hello OCR 2025</text></svg>`;
+    const os = require("os");
+    const tmpdir = os.tmpdir();
+    const tmpPath = path.join(tmpdir, `test-ocr-${Date.now()}.svg`);
+    fs.writeFileSync(tmpPath, tmpSvg, "utf8");
+    absolute = tmpPath;
+    console.log("Created temporary SVG:", absolute);
   }
 
   console.log("Using file:", absolute);
