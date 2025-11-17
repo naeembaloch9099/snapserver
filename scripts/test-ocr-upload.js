@@ -147,17 +147,31 @@ async function run() {
       try {
         const fetch = require("node-fetch");
         const OCR_SPACE_KEY = process.env.OCR_SPACE_KEY || "helloworld";
-        const form = new URLSearchParams();
-        form.append("apikey", OCR_SPACE_KEY);
-        form.append("url", uploadResult.secure_url || uploadResult.url);
-        form.append("language", "eng");
-        form.append("isOverlayRequired", "false");
-        const resp = await fetch("https://api.ocr.space/parse/imageurl", {
-          method: "POST",
-          body: form,
+        // OCR.Space: the `parse/imageurl` endpoint expects a GET with query params
+        // Build the query URL instead of POSTing form data.
+        const queryUrl = new URL("https://api.ocr.space/parse/imageurl");
+        queryUrl.searchParams.append("apikey", OCR_SPACE_KEY);
+        queryUrl.searchParams.append(
+          "url",
+          uploadResult.secure_url || uploadResult.url
+        );
+        queryUrl.searchParams.append("language", "eng");
+        queryUrl.searchParams.append("isOverlayRequired", "false");
+        const resp = await fetch(queryUrl.toString(), {
+          method: "GET",
           headers: { "User-Agent": "SnapGram-OCR-Test" },
         });
+        if (!resp.ok) {
+          const txt = await resp.text().catch(() => "<no body>");
+          throw new Error(
+            `OCR.Space returned HTTP ${resp.status}: ${txt.slice(0, 400)}`
+          );
+        }
         const json = await resp.json();
+        const OCR_DEBUG = String(process.env.OCR_DEBUG || "false") === "true";
+        if (OCR_DEBUG) {
+          console.log("OCR.Space response:", JSON.stringify(json, null, 2));
+        }
         if (json && json.ParsedResults && json.ParsedResults[0]) {
           const parsed = json.ParsedResults[0];
           if (parsed.ParsedText && parsed.ParsedText.trim()) {
