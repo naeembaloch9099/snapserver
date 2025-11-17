@@ -62,6 +62,49 @@ const createPost = async (req, res) => {
           payload.image = url;
           payload.type = payload.type || "image";
         }
+        // If OCR not already extracted from tesseract and OCR_ENABLED, try an external OCR API as a fallback
+        try {
+          const OCR_ENABLED =
+            String(process.env.OCR_ENABLED || "false") === "true";
+          if (
+            OCR_ENABLED &&
+            !payload.extractedText &&
+            uploadResult.resource_type !== "video"
+          ) {
+            try {
+              const fetch = require("node-fetch");
+              const OCR_SPACE_KEY = process.env.OCR_SPACE_KEY || "helloworld"; // test key
+              const form = new URLSearchParams();
+              form.append("apikey", OCR_SPACE_KEY);
+              form.append("url", url);
+              form.append("language", "eng");
+              form.append("isOverlayRequired", "false");
+              const resp = await fetch("https://api.ocr.space/parse/imageurl", {
+                method: "POST",
+                body: form,
+                headers: { "User-Agent": "SnapGram-OCR-Fallback" },
+              });
+              const json = await resp.json();
+              if (json && json.ParsedResults && json.ParsedResults[0]) {
+                const parsed = json.ParsedResults[0];
+                if (parsed.ParsedText && parsed.ParsedText.trim()) {
+                  payload.extractedText = parsed.ParsedText.trim();
+                  console.log(
+                    "OCR.Space extracted text length:",
+                    payload.extractedText.length
+                  );
+                }
+              }
+            } catch (spaceErr) {
+              console.warn(
+                "OCR.Space fallback failed:",
+                spaceErr?.message || spaceErr
+              );
+            }
+          }
+        } catch (inner) {
+          console.warn("OCR fallback error:", inner?.message || inner);
+        }
       } catch (e) {
         console.warn(
           "Cloudinary post upload failed, falling back to body media or local file",
