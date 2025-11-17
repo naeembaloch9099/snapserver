@@ -200,20 +200,41 @@ const sendMessage = async (req, res) => {
     }
 
     if (uploadedFile) {
-      // Build absolute URL
-      const host = `${req.protocol}://${req.get("host")}`;
-      resolvedMediaUrl = `${host}/uploads/${uploadedFile.filename}`;
-
-      // ---
-      // **FIX 2: INFER MEDIA TYPE FROM FILE**
-      // This is more robust than trusting the client's 'media' field
-      // ---
-      if (uploadedFile.mimetype.startsWith("image")) {
-        resolvedMediaType = "image";
-      } else if (uploadedFile.mimetype.startsWith("video")) {
-        resolvedMediaType = "video";
-      } else if (uploadedFile.mimetype.startsWith("audio")) {
-        resolvedMediaType = "audio";
+      // Prefer uploading to Cloudinary if configured, otherwise fall back to local URL
+      try {
+        const { uploadFile } = require("../services/cloudinary");
+        const path = require("path");
+        const localPath = path.join(
+          __dirname,
+          "..",
+          "..",
+          "uploads",
+          uploadedFile.filename
+        );
+        console.log("Uploading media to Cloudinary:", localPath);
+        const uploadResult = await uploadFile(localPath, {
+          folder: "snapgram/messages",
+        });
+        resolvedMediaUrl = uploadResult.secure_url || uploadResult.url;
+        // Cloudinary provides resource_type - determine media type
+        const rtype = uploadResult.resource_type || "image";
+        if (rtype === "video") resolvedMediaType = "video";
+        else if (rtype === "image") resolvedMediaType = "image";
+        else resolvedMediaType = mediaTypeFromClient || null;
+      } catch (e) {
+        console.warn(
+          "Cloudinary upload failed, falling back to local file",
+          e?.message || e
+        );
+        const host = `${req.protocol}://${req.get("host")}`;
+        resolvedMediaUrl = `${host}/uploads/${uploadedFile.filename}`;
+        if (uploadedFile.mimetype.startsWith("image")) {
+          resolvedMediaType = "image";
+        } else if (uploadedFile.mimetype.startsWith("video")) {
+          resolvedMediaType = "video";
+        } else if (uploadedFile.mimetype.startsWith("audio")) {
+          resolvedMediaType = "audio";
+        }
       }
     } else if (bodyMediaUrl) {
       resolvedMediaUrl = bodyMediaUrl;

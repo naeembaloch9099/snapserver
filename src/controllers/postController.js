@@ -8,10 +8,57 @@ const mongoose = require("mongoose");
 const createPost = async (req, res) => {
   try {
     const { caption, media, type } = req.body; // media: data url or remote url
+    const uploadedFile = req.file;
+
     // map incoming `media` to the correct field expected by the Post model
     const payload = { owner: req.user._id, caption, type };
-    if (type === "video") payload.video = media;
-    else payload.image = media;
+
+    // If a file was uploaded, try uploading to Cloudinary
+    if (uploadedFile) {
+      try {
+        const { uploadFile } = require("../services/cloudinary");
+        const path = require("path");
+        const localPath = path.join(
+          __dirname,
+          "..",
+          "..",
+          "uploads",
+          uploadedFile.filename
+        );
+        const uploadResult = await uploadFile(localPath, {
+          folder: "snapgram/posts",
+        });
+        const url = uploadResult.secure_url || uploadResult.url;
+        if (uploadResult.resource_type === "video") {
+          payload.video = url;
+          payload.type = "video";
+        } else {
+          payload.image = url;
+          payload.type = payload.type || "image";
+        }
+      } catch (e) {
+        console.warn(
+          "Cloudinary post upload failed, falling back to body media or local file",
+          e?.message || e
+        );
+        // fallback to body media or local file URL
+        if (media) {
+          if (type === "video") payload.video = media;
+          else payload.image = media;
+        } else {
+          const host = `${req.protocol}://${req.get("host")}`;
+          if (uploadedFile) {
+            const localUrl = `${host}/uploads/${uploadedFile.filename}`;
+            if (uploadedFile.mimetype.startsWith("video"))
+              payload.video = localUrl;
+            else payload.image = localUrl;
+          }
+        }
+      }
+    } else {
+      if (type === "video") payload.video = media;
+      else payload.image = media;
+    }
     const post = new Post(payload);
     await post.save();
     res.status(201).json(post);
