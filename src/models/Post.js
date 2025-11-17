@@ -5,6 +5,8 @@ const PostSchema = new Schema(
   {
     owner: { type: Schema.Types.ObjectId, ref: "User", required: true },
     caption: { type: String },
+    // extractedText: optional OCR-extracted text from the image for search/access
+    extractedText: { type: String },
     image: { type: String },
     video: { type: String },
     likes: { type: Number, default: 0 },

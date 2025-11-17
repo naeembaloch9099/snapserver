@@ -13,18 +13,44 @@ const createPost = async (req, res) => {
     // map incoming `media` to the correct field expected by the Post model
     const payload = { owner: req.user._id, caption, type };
 
-    // If a file was uploaded, try uploading to Cloudinary
+    // If a file was uploaded, try uploading images to Cloudinary (and run OCR if enabled)
     if (uploadedFile) {
+      const path = require("path");
+      const localPath = path.join(
+        __dirname,
+        "..",
+        "..",
+        "uploads",
+        uploadedFile.filename
+      );
+
+      // If OCR enabled via env, and file is an image, run OCR before upload
+      const OCR_ENABLED = String(process.env.OCR_ENABLED || "false") === "true";
+      if (
+        OCR_ENABLED &&
+        uploadedFile.mimetype &&
+        uploadedFile.mimetype.startsWith("image")
+      ) {
+        try {
+          const { createWorker } = require("tesseract.js");
+          const worker = createWorker();
+          await worker.load();
+          await worker.loadLanguage("eng");
+          await worker.initialize("eng");
+          const { data } = await worker.recognize(localPath);
+          if (data && data.text) payload.extractedText = data.text.trim();
+          await worker.terminate();
+        } catch (ocrErr) {
+          console.warn(
+            "OCR failed for uploaded image:",
+            ocrErr?.message || ocrErr
+          );
+        }
+      }
+
+      // Only upload images to Cloudinary; for videos/images we'll attempt cloud upload
       try {
         const { uploadFile } = require("../services/cloudinary");
-        const path = require("path");
-        const localPath = path.join(
-          __dirname,
-          "..",
-          "..",
-          "uploads",
-          uploadedFile.filename
-        );
         const uploadResult = await uploadFile(localPath, {
           folder: "snapgram/posts",
         });
@@ -49,7 +75,10 @@ const createPost = async (req, res) => {
           const host = `${req.protocol}://${req.get("host")}`;
           if (uploadedFile) {
             const localUrl = `${host}/uploads/${uploadedFile.filename}`;
-            if (uploadedFile.mimetype.startsWith("video"))
+            if (
+              uploadedFile.mimetype &&
+              uploadedFile.mimetype.startsWith("video")
+            )
               payload.video = localUrl;
             else payload.image = localUrl;
           }

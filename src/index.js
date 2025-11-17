@@ -1,4 +1,30 @@
 require("dotenv").config();
+
+// Override server console methods to only print Cloudinary-related logs
+// unless LOG_MODE=all (then leave original console behavior)
+try {
+  const LOG_MODE = String(process.env.LOG_MODE || "cloud-only");
+  if (LOG_MODE !== "all") {
+    const origConsole = {};
+    ["log", "info", "warn", "error", "debug"].forEach((m) => {
+      origConsole[m] = console[m];
+      console[m] = (...args) => {
+        try {
+          const text = args
+            .map((a) => (typeof a === "string" ? a : JSON.stringify(a)))
+            .join(" ");
+          if (/cloudinary|cloud/i.test(text)) {
+            origConsole[m](...args);
+          }
+        } catch (e) {
+          // swallow serialization errors
+        }
+      };
+    });
+  }
+} catch (e) {
+  // ignore
+}
 const express = require("express");
 const http = require("http");
 const mongoose = require("mongoose");
