@@ -73,6 +73,10 @@ const getFeed = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    console.log(
+      `[stories.getFeed] found ${stories.length} non-expired stories for allowed posters`
+    );
+
     // Group by poster
     const groupsMap = {};
     for (const s of stories) {
@@ -83,17 +87,26 @@ const getFeed = async (req, res) => {
     }
 
     const posterIds = Object.keys(groupsMap);
+    console.log(`[stories.getFeed] posterIds:`, posterIds);
 
     // compute closeness scores using Interaction model helper
     const scores = await Interaction.computeClosenessScores(
       viewer._id,
       posterIds
     );
+    console.log(
+      `[stories.getFeed] computed closeness scores for ${
+        Object.keys(scores).length
+      } posters`
+    );
 
     // Attach user info and compute hasViewed for each group
     const users = await User.find({ _id: { $in: posterIds } })
       .select("username profilePic isPrivate")
       .lean();
+    console.log(
+      `[stories.getFeed] fetched ${users.length} user profiles for posters`
+    );
     const userById = {};
     users.forEach((u) => (userById[String(u._id)] = u));
 
@@ -128,8 +141,15 @@ const getFeed = async (req, res) => {
 
     return res.json(result);
   } catch (e) {
-    console.warn(e);
-    res.status(500).json({ error: "Server error" });
+    // log full error server-side for debugging
+    console.error("[stories.getFeed] error:", e && e.stack ? e.stack : e);
+    const msg =
+      process.env.NODE_ENV !== "production"
+        ? e && e.message
+          ? e.message
+          : String(e)
+        : "Server error";
+    res.status(500).json({ error: msg });
   }
 };
 
@@ -169,3 +189,25 @@ const logInteraction = async (req, res) => {
 };
 
 module.exports = { uploadStory, getFeed, logInteraction };
+
+// DEBUG: return all stories (dev only)
+const debugAllStories = async (req, res) => {
+  try {
+    const stories = await Story.find({}).sort({ createdAt: -1 }).lean();
+    return res.json({ count: stories.length, stories });
+  } catch (e) {
+    console.error("[stories.debugAll]", e && e.stack ? e.stack : e);
+    return res
+      .status(500)
+      .json({
+        error:
+          process.env.NODE_ENV !== "production"
+            ? e && e.message
+              ? e.message
+              : String(e)
+            : "Server error",
+      });
+  }
+};
+
+module.exports = { uploadStory, getFeed, logInteraction, debugAllStories };

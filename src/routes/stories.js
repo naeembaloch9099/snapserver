@@ -26,6 +26,15 @@ router.post("/upload", auth, upload.single("file"), uploadStory);
 // Get feed (authenticated)
 router.get("/feed", auth, getFeed);
 
+// DEBUG: return all stories (dev-only)
+router.get("/debug_all", auth, (req, res) => {
+  // only allow debug in non-production to avoid exposing data in prod
+  if (process.env.NODE_ENV === "production")
+    return res.status(403).json({ error: "Forbidden" });
+  const { debugAllStories } = require("../controllers/storyController");
+  return debugAllStories(req, res);
+});
+
 // Log interaction (view/reply/reaction)
 router.post("/:id/log_interaction", auth, logInteraction);
 
