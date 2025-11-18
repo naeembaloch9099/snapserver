@@ -46,7 +46,7 @@ const getStoryViewers = async (req, res) => {
   }
 };
 
-module.exports.getStoryViewers = getStoryViewers;
+// Exporting will be done at the end of the file to avoid accidental overwrites
 const path = require("path");
 const Story = require("../models/Story");
 const Interaction = require("../models/Interaction");
@@ -267,7 +267,7 @@ const logInteraction = async (req, res) => {
   }
 };
 
-module.exports = { uploadStory, getFeed, logInteraction };
+// (kept for backwards-compat while we export everything at file end)
 
 // DEBUG: return all stories (dev only)
 const debugAllStories = async (req, res) => {
@@ -287,8 +287,7 @@ const debugAllStories = async (req, res) => {
   }
 };
 
-module.exports = { uploadStory, getFeed, logInteraction, debugAllStories };
-
+// (exports consolidated at end)
 // Proxy a story media URL through the server for authenticated clients.
 const proxyStory = async (req, res) => {
   try {
@@ -335,10 +334,12 @@ const proxyStory = async (req, res) => {
   }
 };
 
+// Consolidated exports for all controller functions
 module.exports = {
   uploadStory,
   getFeed,
   logInteraction,
   debugAllStories,
   proxyStory,
+  getStoryViewers,
 };
