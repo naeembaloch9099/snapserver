@@ -3,13 +3,27 @@ const router = express.Router();
 const auth = require("../middleware/auth");
 const path = require("path");
 const multer = require("multer");
-const {
-  uploadStory,
-  getFeed,
-  logInteraction,
-  proxyStory,
-} = require("../controllers/storyController");
-const { getStoryViewers } = require("../controllers/storyController");
+const storyController = require("../controllers/storyController");
+
+// Helper to ensure a handler is a function, otherwise provide a helpful 501 responder
+const ensureHandler = (fn, name) => {
+  if (typeof fn === "function") return fn;
+  console.warn(`[stories.routes] controller handler missing: ${name}`);
+  return (req, res) =>
+    res.status(501).json({ error: `Handler ${name} not implemented` });
+};
+
+const uploadStory = ensureHandler(storyController.uploadStory, "uploadStory");
+const getFeed = ensureHandler(storyController.getFeed, "getFeed");
+const logInteraction = ensureHandler(
+  storyController.logInteraction,
+  "logInteraction"
+);
+const proxyStory = ensureHandler(storyController.proxyStory, "proxyStory");
+const getStoryViewers = ensureHandler(
+  storyController.getStoryViewers,
+  "getStoryViewers"
+);
 
 // multer storage setup (same uploads folder as posts)
 const uploadDir = path.join(__dirname, "..", "..", "uploads");
