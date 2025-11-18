@@ -3,6 +3,7 @@ const Story = require("../models/Story");
 const Interaction = require("../models/Interaction");
 const User = require("../models/User");
 const { uploadFile } = require("../services/cloudinary");
+const fetch = require("node-fetch");
 
 // Upload a story: multipart form with file field `file`.
 // Story is stored with expiresAt = now + 1 hour.
@@ -238,3 +239,57 @@ const debugAllStories = async (req, res) => {
 };
 
 module.exports = { uploadStory, getFeed, logInteraction, debugAllStories };
+
+// Proxy a story media URL through the server for authenticated clients.
+const proxyStory = async (req, res) => {
+  try {
+    const viewer = req.user;
+    if (!viewer) return res.status(401).json({ error: "Unauthorized" });
+    const { id } = req.params;
+    const story = await Story.findById(id).lean();
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    // Allow only if owner or follower
+    const isAllowed =
+      String(story.user) === String(viewer._id) ||
+      (viewer.following || []).some(
+        (f) => String(f._id || f) === String(story.user)
+      );
+    if (!isAllowed) return res.status(403).json({ error: "Not allowed" });
+
+    const upstreamUrl = story.url;
+    if (!upstreamUrl) return res.status(404).json({ error: "No media URL" });
+
+    // Forward Range header if provided to support partial content
+    const headers = {};
+    if (req.headers.range) headers.Range = req.headers.range;
+
+    const upstreamRes = await fetch(upstreamUrl, { method: "GET", headers });
+    // forward status and selected headers
+    res.status(upstreamRes.status);
+    const ct = upstreamRes.headers.get("content-type");
+    const cl = upstreamRes.headers.get("content-length");
+    const acceptRanges = upstreamRes.headers.get("accept-ranges");
+    const contentRange = upstreamRes.headers.get("content-range");
+    if (ct) res.setHeader("content-type", ct);
+    if (cl) res.setHeader("content-length", cl);
+    if (acceptRanges) res.setHeader("accept-ranges", acceptRanges);
+    if (contentRange) res.setHeader("content-range", contentRange);
+
+    // Stream the body to the client
+    const body = upstreamRes.body;
+    if (!body) return res.end();
+    body.pipe(res);
+  } catch (e) {
+    console.error("[stories.proxyStory] error:", e && e.stack ? e.stack : e);
+    res.status(500).json({ error: "Proxy failed" });
+  }
+};
+
+module.exports = {
+  uploadStory,
+  getFeed,
+  logInteraction,
+  debugAllStories,
+  proxyStory,
+};

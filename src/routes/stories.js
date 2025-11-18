@@ -7,6 +7,7 @@ const {
   uploadStory,
   getFeed,
   logInteraction,
+  proxyStory,
 } = require("../controllers/storyController");
 
 // multer storage setup (same uploads folder as posts)
@@ -37,5 +38,8 @@ router.get("/debug_all", auth, (req, res) => {
 
 // Log interaction (view/reply/reaction)
 router.post("/:id/log_interaction", auth, logInteraction);
+
+// Proxy story media for authenticated clients
+router.get("/proxy/:id", auth, proxyStory);
 
 module.exports = router;
