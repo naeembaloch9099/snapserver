@@ -238,7 +238,10 @@ const debugAllStories = async (req, res) => {
   }
 };
 
-module.exports = { uploadStory, getFeed, logInteraction, debugAllStories };
+// Exported functions (initial set)
+// Note: final consolidated export will be at the end of the file.
+
+// (kept for backwards-compatibility during incremental edits)
 
 // Proxy a story media URL through the server for authenticated clients.
 const proxyStory = async (req, res) => {
@@ -276,9 +279,36 @@ const proxyStory = async (req, res) => {
     if (acceptRanges) res.setHeader("accept-ranges", acceptRanges);
     if (contentRange) res.setHeader("content-range", contentRange);
 
-    // Stream the body to the client
+    // Stream the body to the client with safe error/close handling
     const body = upstreamRes.body;
     if (!body) return res.end();
+
+    // Forward any upstream stream errors to the response and log them
+    body.on("error", (err) => {
+      console.error(
+        `[stories.proxyStory] upstream stream error for ${id}:`,
+        err && err.stack ? err.stack : err
+      );
+      try {
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Proxy stream error" });
+        } else {
+          res.destroy(err);
+        }
+      } catch (e) {
+        // swallow errors while trying to notify client
+      }
+    });
+
+    // If client closes connection, destroy upstream body to free resources
+    res.on("close", () => {
+      try {
+        if (body.destroy) body.destroy();
+      } catch (e) {
+        /* ignore */
+      }
+    });
+
     body.pipe(res);
   } catch (e) {
     console.error("[stories.proxyStory] error:", e && e.stack ? e.stack : e);
@@ -286,10 +316,47 @@ const proxyStory = async (req, res) => {
   }
 };
 
+// keep definitions above; final export block will export everything together
+
+// GET /api/stories/:id/viewers - return list of viewers for a story (owner only)
+const getViewers = async (req, res) => {
+  try {
+    const viewer = req.user;
+    if (!viewer) return res.status(401).json({ error: "Unauthorized" });
+    const { id } = req.params;
+    const story = await Story.findById(id).lean();
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    // Only the owner of the story may fetch the viewers list
+    if (String(story.user) !== String(viewer._id))
+      return res.status(403).json({ error: "Forbidden" });
+
+    const Interaction = require("../models/Interaction");
+    const views = await Interaction.find({ storyId: story._id, type: "view" })
+      .sort({ createdAt: -1 })
+      .populate("userId", "username profilePic")
+      .lean();
+
+    const result = views.map((v) => ({
+      userId: v.userId?._id || null,
+      username: v.userId?.username || "",
+      profilePic: v.userId?.profilePic || "",
+      viewedAt: v.createdAt,
+    }));
+
+    return res.json({ count: result.length, viewers: result });
+  } catch (e) {
+    console.error("[stories.getViewers] error:", e && e.stack ? e.stack : e);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+// Final consolidated export
 module.exports = {
   uploadStory,
   getFeed,
   logInteraction,
   debugAllStories,
   proxyStory,
+  getViewers,
 };

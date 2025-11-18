@@ -3,12 +3,9 @@ const router = express.Router();
 const auth = require("../middleware/auth");
 const path = require("path");
 const multer = require("multer");
-const {
-  uploadStory,
-  getFeed,
-  logInteraction,
-  proxyStory,
-} = require("../controllers/storyController");
+const controllers = require("../controllers/storyController");
+const { uploadStory, getFeed, logInteraction, proxyStory, getViewers } =
+  controllers;
 
 // multer storage setup (same uploads folder as posts)
 const uploadDir = path.join(__dirname, "..", "..", "uploads");
@@ -41,5 +38,8 @@ router.post("/:id/log_interaction", auth, logInteraction);
 
 // Proxy story media for authenticated clients
 router.get("/proxy/:id", auth, proxyStory);
+
+// viewers list for a story (owner-only)
+router.get("/:id/viewers", auth, getViewers);
 
 module.exports = router;
