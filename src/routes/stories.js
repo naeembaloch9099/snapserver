@@ -27,6 +27,6 @@ router.post("/upload", auth, upload.single("file"), uploadStory);
 router.get("/feed", auth, getFeed);
 
 // Log interaction (view/reply/reaction)
-router.post(":id/log_interaction", auth, logInteraction);
+router.post("/:id/log_interaction", auth, logInteraction);
 
 module.exports = router;
