@@ -89,24 +89,45 @@ const getFeed = async (req, res) => {
     const posterIds = Object.keys(groupsMap);
     console.log(`[stories.getFeed] posterIds:`, posterIds);
 
+    // If no posters, return empty result early
+    if (!posterIds || posterIds.length === 0) {
+      return res.json([]);
+    }
+
     // compute closeness scores using Interaction model helper
-    const scores = await Interaction.computeClosenessScores(
-      viewer._id,
-      posterIds
-    );
-    console.log(
-      `[stories.getFeed] computed closeness scores for ${
-        Object.keys(scores).length
-      } posters`
-    );
+    let scores = {};
+    try {
+      scores = await Interaction.computeClosenessScores(viewer._id, posterIds);
+      console.log(
+        `[stories.getFeed] computed closeness scores for ${
+          Object.keys(scores).length
+        } posters`
+      );
+    } catch (scoreErr) {
+      // don't fail the whole request for scoring errors; log and continue with zero scores
+      console.warn(
+        "[stories.getFeed] computeClosenessScores failed:",
+        scoreErr && scoreErr.stack ? scoreErr.stack : scoreErr
+      );
+      scores = {};
+    }
 
     // Attach user info and compute hasViewed for each group
-    const users = await User.find({ _id: { $in: posterIds } })
-      .select("username profilePic isPrivate")
-      .lean();
-    console.log(
-      `[stories.getFeed] fetched ${users.length} user profiles for posters`
-    );
+    let users = [];
+    try {
+      users = await User.find({ _id: { $in: posterIds } })
+        .select("username profilePic isPrivate")
+        .lean();
+      console.log(
+        `[stories.getFeed] fetched ${users.length} user profiles for posters`
+      );
+    } catch (userErr) {
+      console.warn(
+        "[stories.getFeed] failed to fetch user profiles:",
+        userErr && userErr.stack ? userErr.stack : userErr
+      );
+      users = [];
+    }
     const userById = {};
     users.forEach((u) => (userById[String(u._id)] = u));
 
@@ -118,12 +139,20 @@ const getFeed = async (req, res) => {
       const newest = (g.stories || [])[0];
       let hasViewed = false;
       if (newest) {
-        const view = await Interaction.findOne({
-          storyId: newest._id,
-          userId: viewer._id,
-          type: "view",
-        }).lean();
-        hasViewed = !!view;
+        try {
+          const view = await Interaction.findOne({
+            storyId: newest._id,
+            userId: viewer._id,
+            type: "view",
+          }).lean();
+          hasViewed = !!view;
+        } catch (viewErr) {
+          console.warn(
+            `[stories.getFeed] view lookup failed for story ${newest._id}:`,
+            viewErr && viewErr.stack ? viewErr.stack : viewErr
+          );
+          hasViewed = false;
+        }
       }
       result.push({
         userId: pid,
@@ -197,16 +226,14 @@ const debugAllStories = async (req, res) => {
     return res.json({ count: stories.length, stories });
   } catch (e) {
     console.error("[stories.debugAll]", e && e.stack ? e.stack : e);
-    return res
-      .status(500)
-      .json({
-        error:
-          process.env.NODE_ENV !== "production"
-            ? e && e.message
-              ? e.message
-              : String(e)
-            : "Server error",
-      });
+    return res.status(500).json({
+      error:
+        process.env.NODE_ENV !== "production"
+          ? e && e.message
+            ? e.message
+            : String(e)
+          : "Server error",
+    });
   }
 };
 
