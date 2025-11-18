@@ -9,6 +9,7 @@ const {
   logInteraction,
   proxyStory,
 } = require("../controllers/storyController");
+const { getStoryViewers } = require("../controllers/storyController");
 
 // multer storage setup (same uploads folder as posts)
 const uploadDir = path.join(__dirname, "..", "..", "uploads");
@@ -41,5 +42,8 @@ router.post("/:id/log_interaction", auth, logInteraction);
 
 // Proxy story media for authenticated clients
 router.get("/proxy/:id", auth, proxyStory);
+
+// Get viewers for a story (owner only)
+router.get("/:id/viewers", auth, getStoryViewers);
 
 module.exports = router;

@@ -1,3 +1,52 @@
+// GET /api/stories/:id/viewers - return list of viewers for a story (owner only)
+const getStoryViewers = async (req, res) => {
+  try {
+    const viewer = req.user;
+    if (!viewer) return res.status(401).json({ error: "Unauthorized" });
+    const { id } = req.params;
+    const story = await Story.findById(id).lean();
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    // Only the story owner may view the viewers list
+    if (String(story.user) !== String(viewer._id))
+      return res.status(403).json({ error: "Forbidden" });
+
+    // Find view interactions for this story, newest first, grouped by user
+    const rows = await Interaction.aggregate([
+      { $match: { storyId: story._id, type: "view" } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: "$userId",
+          lastViewedAt: { $first: "$createdAt" },
+        },
+      },
+      { $sort: { lastViewedAt: -1 } },
+      { $limit: 100 },
+    ]).allowDiskUse(true);
+
+    const userIds = rows.map((r) => r._id);
+    const users = await User.find({ _id: { $in: userIds } })
+      .select("username profilePic")
+      .lean();
+    const userById = {};
+    users.forEach((u) => (userById[String(u._id)] = u));
+
+    const viewers = rows.map((r) => ({
+      userId: String(r._id),
+      lastViewedAt: r.lastViewedAt,
+      username: (userById[String(r._id)] || {}).username || "",
+      profilePic: (userById[String(r._id)] || {}).profilePic || "",
+    }));
+
+    return res.json({ count: viewers.length, viewers });
+  } catch (e) {
+    console.error("[stories.getStoryViewers]", e && e.stack ? e.stack : e);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+module.exports.getStoryViewers = getStoryViewers;
 const path = require("path");
 const Story = require("../models/Story");
 const Interaction = require("../models/Interaction");
