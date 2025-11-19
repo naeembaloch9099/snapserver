@@ -23,7 +23,12 @@ const MessageSchema = new Schema(
       image: { type: String },
       video: { type: String },
       type: { type: String, enum: ["image", "video", null] },
+    }, // --- START: ADDED FIELD FOR STORY METADATA ---
+    metadata: {
+      type: Schema.Types.Mixed,
+      default: null,
     },
+    // --- END: ADDED FIELD FOR STORY METADATA ---
     seen: { type: Boolean, default: false },
   },
   { timestamps: true }
