@@ -36,6 +36,13 @@ router.get("/debug_all", auth, (req, res) => {
 // Log interaction (view/reply/reaction)
 router.post("/:id/log_interaction", auth, logInteraction);
 
+// Remove owner's reaction (owner-only)
+router.delete(
+  "/:id/reaction",
+  auth,
+  require("../controllers/storyController").removeReaction
+);
+
 // Proxy story media for authenticated clients
 router.get("/proxy/:id", auth, proxyStory);
 

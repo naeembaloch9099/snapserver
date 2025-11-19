@@ -342,11 +342,70 @@ const getViewers = async (req, res) => {
       username: v.userId?.username || "",
       profilePic: v.userId?.profilePic || "",
       viewedAt: v.createdAt,
+      likedByOwner: false,
     }));
+
+    // Determine which viewers the owner has 'hearted' (reaction)
+    try {
+      const viewerIds = result.map((r) => r.userId).filter(Boolean);
+      if (viewerIds.length > 0) {
+        const reactions = await Interaction.find({
+          storyId: story._id,
+          type: "reaction",
+          userId: viewer._id, // owner
+          "metadata.targetUserId": { $in: viewerIds },
+        }).lean();
+        const likedSet = new Set(
+          reactions.map((r) => String(r.metadata?.targetUserId))
+        );
+        result.forEach((r) => {
+          if (r.userId && likedSet.has(String(r.userId))) r.likedByOwner = true;
+        });
+      }
+    } catch (e) {
+      console.warn("[stories.getViewers] failed to fetch owner reactions:", e);
+    }
 
     return res.json({ count: result.length, viewers: result });
   } catch (e) {
     console.error("[stories.getViewers] error:", e && e.stack ? e.stack : e);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
+// DELETE /api/stories/:id/reaction?targetUserId=... - remove an owner's reaction to a viewer
+const removeReaction = async (req, res) => {
+  try {
+    const viewer = req.user; // the authenticated user (should be owner)
+    if (!viewer) return res.status(401).json({ error: "Unauthorized" });
+    const { id } = req.params;
+    const targetUserId = req.query.targetUserId;
+    if (!targetUserId)
+      return res.status(400).json({ error: "Missing targetUserId" });
+
+    const story = await Story.findById(id).lean();
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    // Only story owner may remove their own reaction
+    if (String(story.user) !== String(viewer._id))
+      return res.status(403).json({ error: "Forbidden" });
+
+    const Interaction = require("../models/Interaction");
+    const del = await Interaction.findOneAndDelete({
+      storyId: story._id,
+      userId: viewer._id,
+      type: "reaction",
+      "metadata.targetUserId": targetUserId,
+      "metadata.reaction": "heart",
+    });
+
+    if (!del) return res.status(404).json({ error: "Reaction not found" });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(
+      "[stories.removeReaction] error:",
+      e && e.stack ? e.stack : e
+    );
     return res.status(500).json({ error: "Server error" });
   }
 };
@@ -359,4 +418,5 @@ module.exports = {
   debugAllStories,
   proxyStory,
   getViewers,
+  removeReaction,
 };
