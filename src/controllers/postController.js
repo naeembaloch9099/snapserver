@@ -250,6 +250,49 @@ const getFeed = async (req, res) => {
   }
 };
 
+const searchPosts = async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim();
+    if (!q) return res.json({ results: [] });
+
+    const page = parseInt(req.query.page || "0");
+    const limit = parseInt(req.query.limit || "20");
+    const skip = Math.max(0, page) * limit;
+
+    // escape regex special chars
+    const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(esc, "i");
+
+    const rows = await Post.find({
+      $or: [
+        { caption: { $regex: regex } },
+        { extractedText: { $regex: regex } },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate(
+        "owner",
+        "username displayName avatar profilePic isPrivate followers"
+      )
+      .populate({
+        path: "comments",
+        populate: {
+          path: "user",
+          select: "username displayName avatar profilePic",
+        },
+      })
+      .lean()
+      .exec();
+
+    res.json({ results: rows });
+  } catch (e) {
+    console.error("[searchPosts] Error:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 const toggleLike = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);

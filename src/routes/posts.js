@@ -3,6 +3,7 @@ const auth = require("../middleware/auth");
 const {
   createPost,
   getFeed,
+  searchPosts,
   toggleLike,
   addComment,
   toggleCommentLike,
@@ -29,6 +30,10 @@ const router = express.Router();
 
 // Accept multipart/form-data with optional file field named `file`
 router.post("/", auth, upload.single("file"), createPost);
+// public feed - allow unauthenticated access to browse posts
+// search posts by query/hashtag
+router.get("/search", searchPosts);
+
 // public feed - allow unauthenticated access to browse posts
 router.get("/", getFeed);
 router.post("/:id/like", auth, toggleLike);

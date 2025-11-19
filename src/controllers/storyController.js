@@ -29,7 +29,7 @@ const uploadStory = async (req, res) => {
       const url = uploadResult.secure_url || uploadResult.url;
       const publicId = uploadResult.public_id;
 
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      const expiresAt = new Date(Date.now() + 10 * 60 * 60 * 1000); // 10 hours
 
       const story = new Story({
         user: req.user._id,
