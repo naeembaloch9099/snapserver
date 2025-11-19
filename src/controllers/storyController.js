@@ -410,6 +410,54 @@ const removeReaction = async (req, res) => {
   }
 };
 
+// DELETE /api/stories/:id - delete a story (owner only)
+const deleteStory = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+    const { id } = req.params;
+    const story = await Story.findById(id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    // Only owner may delete
+    if (String(story.user) !== String(user._id))
+      return res.status(403).json({ error: "Forbidden" });
+
+    // Delete interactions referencing this story
+    try {
+      const Interaction = require("../models/Interaction");
+      const deleted = await Interaction.deleteMany({ storyId: story._id });
+      console.log(
+        `Deleted ${deleted.deletedCount || 0} interactions for story ${id}`
+      );
+    } catch (e) {
+      console.warn("Failed to delete story interactions:", e?.message || e);
+    }
+
+    // Remove Cloudinary asset if present
+    try {
+      if (story.cloudinaryId) {
+        const { cloudinary } = require("../services/cloudinary");
+        await cloudinary.uploader.destroy(story.cloudinaryId, {
+          resource_type: "auto",
+        });
+        console.log(`Deleted cloudinary asset for story ${id}`);
+      }
+    } catch (e) {
+      console.warn(
+        "Failed to remove cloudinary asset for story:",
+        e?.message || e
+      );
+    }
+
+    await Story.deleteOne({ _id: story._id });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[stories.deleteStory] error:", e && e.stack ? e.stack : e);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
 // Final consolidated export
 module.exports = {
   uploadStory,
@@ -419,4 +467,5 @@ module.exports = {
   proxyStory,
   getViewers,
   removeReaction,
+  deleteStory,
 };

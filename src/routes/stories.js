@@ -48,5 +48,7 @@ router.get("/proxy/:id", auth, proxyStory);
 
 // viewers list for a story (owner-only)
 router.get("/:id/viewers", auth, getViewers);
+// delete a story (owner only)
+router.delete('/:id', auth, require('../controllers/storyController').deleteStory);
 
 module.exports = router;
