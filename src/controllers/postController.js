@@ -703,6 +703,7 @@ const deletePost = async (req, res) => {
 module.exports = {
   createPost,
   getFeed,
+  searchPosts,
   toggleLike,
   addComment,
   toggleCommentLike,
