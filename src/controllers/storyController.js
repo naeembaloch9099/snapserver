@@ -390,30 +390,43 @@ const getViewers = async (req, res) => {
 // DELETE /api/stories/:id/reaction?targetUserId=... - remove an owner's reaction to a viewer
 const removeReaction = async (req, res) => {
   try {
-    const viewer = req.user; // the authenticated user (should be owner)
+    const viewer = req.user; // the authenticated user
     if (!viewer) return res.status(401).json({ error: "Unauthorized" });
     const { id } = req.params;
     const targetUserId = req.query.targetUserId;
-    if (!targetUserId)
-      return res.status(400).json({ error: "Missing targetUserId" });
 
     const story = await Story.findById(id).lean();
     if (!story) return res.status(404).json({ error: "Story not found" });
 
-    // Only story owner may remove their own reaction
-    if (String(story.user) !== String(viewer._id))
-      return res.status(403).json({ error: "Forbidden" });
-
     const Interaction = require("../models/Interaction");
+
+    // Case 1: Owner removing heart from a viewer (owner -> viewer)
+    if (targetUserId) {
+      // Only story owner may remove their own reaction
+      if (String(story.user) !== String(viewer._id))
+        return res.status(403).json({ error: "Forbidden" });
+
+      const del = await Interaction.findOneAndDelete({
+        storyId: story._id,
+        userId: viewer._id,
+        type: "reaction",
+        "metadata.targetUserId": targetUserId,
+        "metadata.reaction": "heart",
+      });
+
+      if (!del) return res.status(404).json({ error: "Reaction not found" });
+      return res.json({ ok: true });
+    }
+
+    // Case 2: Viewer removing their own like from story (viewer -> story)
     const del = await Interaction.findOneAndDelete({
       storyId: story._id,
       userId: viewer._id,
       type: "reaction",
-      "metadata.targetUserId": targetUserId,
       "metadata.reaction": "heart",
     });
 
-    if (!del) return res.status(404).json({ error: "Reaction not found" });
+    if (!del) return res.status(404).json({ error: "Like not found" });
     return res.json({ ok: true });
   } catch (e) {
     console.error(
