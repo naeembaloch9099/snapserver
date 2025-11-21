@@ -48,7 +48,19 @@ router.get("/proxy/:id", auth, proxyStory);
 
 // viewers list for a story (owner-only)
 router.get("/:id/viewers", auth, getViewers);
+
+// Check if current user has liked the story
+router.get(
+  "/:id/my-like",
+  auth,
+  require("../controllers/storyController").checkMyLike
+);
+
 // delete a story (owner only)
-router.delete('/:id', auth, require('../controllers/storyController').deleteStory);
+router.delete(
+  "/:id",
+  auth,
+  require("../controllers/storyController").deleteStory
+);
 
 module.exports = router;

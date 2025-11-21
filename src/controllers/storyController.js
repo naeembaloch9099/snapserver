@@ -437,6 +437,31 @@ const removeReaction = async (req, res) => {
   }
 };
 
+// GET /api/stories/:id/my-like - check if current user has liked this story
+const checkMyLike = async (req, res) => {
+  try {
+    const viewer = req.user;
+    if (!viewer) return res.status(401).json({ error: "Unauthorized" });
+    const { id } = req.params;
+
+    const story = await Story.findById(id).lean();
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    const Interaction = require("../models/Interaction");
+    const like = await Interaction.findOne({
+      storyId: story._id,
+      userId: viewer._id,
+      type: "reaction",
+      "metadata.reaction": "heart",
+    }).lean();
+
+    return res.json({ liked: !!like });
+  } catch (e) {
+    console.error("[stories.checkMyLike] error:", e && e.stack ? e.stack : e);
+    return res.status(500).json({ error: "Server error" });
+  }
+};
+
 // DELETE /api/stories/:id - delete a story (owner only)
 const deleteStory = async (req, res) => {
   try {
@@ -493,6 +518,7 @@ module.exports = {
   debugAllStories,
   proxyStory,
   getViewers,
+  checkMyLike,
   removeReaction,
   deleteStory,
 };
