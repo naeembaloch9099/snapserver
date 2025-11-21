@@ -196,13 +196,16 @@ const logInteraction = async (req, res) => {
     const story = await Story.findById(id);
     if (!story) return res.status(404).json({ error: "Story not found" });
 
-    // Respect privacy: only allow interactions if the story belongs to someone the viewer follows or self
-    const isAllowed =
-      String(story.user) === String(viewer._id) ||
-      (viewer.following || []).some(
-        (f) => String(f._id || f) === String(story.user)
-      );
-    if (!isAllowed) return res.status(403).json({ error: "Not allowed" });
+    // For VIEW interactions: allow anyone (no privacy check)
+    // For REPLY/REACTION: only allow owner or followers
+    if (type !== "view") {
+      const isAllowed =
+        String(story.user) === String(viewer._id) ||
+        (viewer.following || []).some(
+          (f) => String(f._id || f) === String(story.user)
+        );
+      if (!isAllowed) return res.status(403).json({ error: "Not allowed" });
+    }
 
     const doc = new Interaction({
       storyId: story._id,
@@ -337,7 +340,18 @@ const getViewers = async (req, res) => {
       .populate("userId", "username profilePic")
       .lean();
 
-    const result = views.map((v) => ({
+    // Deduplicate: keep only the most recent view per user
+    const seenUserIds = new Set();
+    const dedupedViews = [];
+    for (const v of views) {
+      const userId = String(v.userId?._id || "");
+      if (userId && !seenUserIds.has(userId)) {
+        seenUserIds.add(userId);
+        dedupedViews.push(v);
+      }
+    }
+
+    const result = dedupedViews.map((v) => ({
       userId: v.userId?._id || null,
       username: v.userId?.username || "",
       profilePic: v.userId?.profilePic || "",
