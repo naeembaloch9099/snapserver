@@ -4,8 +4,17 @@ const auth = require("../middleware/auth");
 const path = require("path");
 const multer = require("multer");
 const controllers = require("../controllers/storyController");
-const { uploadStory, getFeed, logInteraction, proxyStory, getViewers } =
-  controllers;
+const {
+  uploadStory,
+  getFeed,
+  logInteraction,
+  proxyStory,
+  getViewers,
+  getArchive,
+  archiveStory,
+  unarchiveStory,
+  autoArchiveExpired,
+} = controllers;
 
 // multer storage setup (same uploads folder as posts)
 const uploadDir = path.join(__dirname, "..", "..", "uploads");
@@ -62,5 +71,17 @@ router.delete(
   auth,
   require("../controllers/storyController").deleteStory
 );
+
+// Get user's archived stories
+router.get("/archive/list", auth, getArchive);
+
+// Archive a story
+router.post("/:id/archive", auth, archiveStory);
+
+// Restore story from archive
+router.post("/:id/unarchive", auth, unarchiveStory);
+
+// Auto-archive all expired stories for user
+router.post("/auto-archive/run", auth, autoArchiveExpired);
 
 module.exports = router;

@@ -70,6 +70,7 @@ const getFeed = async (req, res) => {
     const stories = await Story.find({
       user: { $in: allowed },
       expiresAt: { $gt: now },
+      isArchived: false,
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -525,6 +526,107 @@ const deleteStory = async (req, res) => {
   }
 };
 
+// GET /api/stories/archive - Get user's archived stories
+const getArchive = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const archivedStories = await Story.find({
+      user: user._id,
+      isArchived: true,
+    })
+      .sort({ archivedAt: -1 })
+      .lean();
+
+    return res.status(200).json(archivedStories);
+  } catch (e) {
+    console.error("Error fetching archive:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// POST /api/stories/:id/archive - Archive a story
+const archiveStory = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const story = await Story.findById(req.params.id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    // Only owner can archive
+    if (String(story.user) !== String(user._id)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    story.isArchived = true;
+    story.archivedAt = new Date();
+    await story.save();
+
+    return res.status(200).json({ message: "Story archived", story });
+  } catch (e) {
+    console.error("Error archiving story:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// POST /api/stories/:id/unarchive - Restore story from archive
+const unarchiveStory = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const story = await Story.findById(req.params.id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+
+    // Only owner can unarchive
+    if (String(story.user) !== String(user._id)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    story.isArchived = false;
+    story.archivedAt = null;
+    await story.save();
+
+    return res.status(200).json({ message: "Story restored", story });
+  } catch (e) {
+    console.error("Error restoring story:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// POST /api/stories/auto-archive - Auto-archive all expired stories for user
+const autoArchiveExpired = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ error: "Unauthorized" });
+
+    const now = new Date();
+    const expiredStories = await Story.updateMany(
+      {
+        user: user._id,
+        expiresAt: { $lt: now },
+        isArchived: false,
+      },
+      {
+        $set: {
+          isArchived: true,
+          archivedAt: now,
+        },
+      }
+    );
+
+    return res.status(200).json({
+      message: "Auto-archive completed",
+      count: expiredStories.modifiedCount,
+    });
+  } catch (e) {
+    console.error("Error auto-archiving:", e);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 // Final consolidated export
 module.exports = {
   uploadStory,
@@ -536,4 +638,8 @@ module.exports = {
   checkMyLike,
   removeReaction,
   deleteStory,
+  getArchive,
+  archiveStory,
+  unarchiveStory,
+  autoArchiveExpired,
 };
