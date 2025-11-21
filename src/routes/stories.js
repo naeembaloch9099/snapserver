@@ -33,7 +33,8 @@ router.post("/upload", auth, upload.single("file"), uploadStory);
 // Get feed (authenticated)
 router.get("/feed", auth, getFeed);
 
-// Get user's archived stories (must come before /:id routes)
+// === ARCHIVE ROUTES (MUST COME FIRST - specific paths before :id) ===
+// Get user's archived stories
 router.get("/archive/list", auth, getArchive);
 
 // Auto-archive expired stories
@@ -47,6 +48,8 @@ router.get("/debug_all", auth, (req, res) => {
   const { debugAllStories } = require("../controllers/storyController");
   return debugAllStories(req, res);
 });
+
+// === DYNAMIC ROUTES (generic :id routes come LAST) ===
 
 // Log interaction (view/reply/reaction)
 router.post("/:id/log_interaction", auth, logInteraction);
