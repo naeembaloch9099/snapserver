@@ -375,6 +375,21 @@ const getViewers = async (req, res) => {
         result.forEach((r) => {
           if (r.userId && likedSet.has(String(r.userId))) r.likedByOwner = true;
         });
+
+        // Also check if any viewers have liked the story themselves
+        const viewerLikes = await Interaction.find({
+          storyId: story._id,
+          userId: { $in: viewerIds },
+          type: "reaction",
+          "metadata.reaction": "heart",
+        }).lean();
+
+        const viewerLikeSet = new Set(viewerLikes.map((r) => String(r.userId)));
+
+        result.forEach((r) => {
+          if (r.userId && viewerLikeSet.has(String(r.userId)))
+            r.likedByOwner = true;
+        });
       }
     } catch (e) {
       console.warn("[stories.getViewers] failed to fetch owner reactions:", e);
