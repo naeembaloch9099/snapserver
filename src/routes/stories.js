@@ -33,6 +33,12 @@ router.post("/upload", auth, upload.single("file"), uploadStory);
 // Get feed (authenticated)
 router.get("/feed", auth, getFeed);
 
+// Get user's archived stories (must come before /:id routes)
+router.get("/archive/list", auth, getArchive);
+
+// Auto-archive expired stories
+router.post("/archive/auto", auth, autoArchiveExpired);
+
 // DEBUG: return all stories (dev-only)
 router.get("/debug_all", auth, (req, res) => {
   // only allow debug in non-production to avoid exposing data in prod
@@ -65,23 +71,17 @@ router.get(
   require("../controllers/storyController").checkMyLike
 );
 
-// delete a story (owner only)
-router.delete(
-  "/:id",
-  auth,
-  require("../controllers/storyController").deleteStory
-);
-
-// Get user's archived stories
-router.get("/archive/list", auth, getArchive);
-
 // Archive a story
 router.post("/:id/archive", auth, archiveStory);
 
 // Restore story from archive
 router.post("/:id/unarchive", auth, unarchiveStory);
 
-// Auto-archive all expired stories for user
-router.post("/auto-archive/run", auth, autoArchiveExpired);
+// delete a story (owner only)
+router.delete(
+  "/:id",
+  auth,
+  require("../controllers/storyController").deleteStory
+);
 
 module.exports = router;

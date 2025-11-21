@@ -132,6 +132,15 @@ mongoose
   .connect(MONGO)
   .then(() => {
     console.log("Connected to MongoDB");
+
+    // Start archive worker to auto-archive expired stories
+    try {
+      const { startArchiveWorker } = require("./services/archiveService");
+      startArchiveWorker();
+    } catch (e) {
+      console.warn("Failed to start archive worker:", e?.message);
+    }
+
     server.listen(PORT, () => {
       console.log(`Server listening on ${PORT}`);
     });
