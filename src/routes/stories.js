@@ -4,17 +4,8 @@ const auth = require("../middleware/auth");
 const path = require("path");
 const multer = require("multer");
 const controllers = require("../controllers/storyController");
-const {
-  uploadStory,
-  getFeed,
-  logInteraction,
-  proxyStory,
-  getViewers,
-  getArchive,
-  archiveStory,
-  unarchiveStory,
-  autoArchiveExpired,
-} = controllers;
+const { uploadStory, getFeed, logInteraction, proxyStory, getViewers } =
+  controllers;
 
 // multer storage setup (same uploads folder as posts)
 const uploadDir = path.join(__dirname, "..", "..", "uploads");
@@ -33,13 +24,6 @@ router.post("/upload", auth, upload.single("file"), uploadStory);
 // Get feed (authenticated)
 router.get("/feed", auth, getFeed);
 
-// === ARCHIVE ROUTES (MUST COME FIRST - specific paths before :id) ===
-// Get user's archived stories
-router.get("/archive/list", auth, getArchive);
-
-// Auto-archive expired stories
-router.post("/archive/auto", auth, autoArchiveExpired);
-
 // DEBUG: return all stories (dev-only)
 router.get("/debug_all", auth, (req, res) => {
   // only allow debug in non-production to avoid exposing data in prod
@@ -48,8 +32,6 @@ router.get("/debug_all", auth, (req, res) => {
   const { debugAllStories } = require("../controllers/storyController");
   return debugAllStories(req, res);
 });
-
-// === DYNAMIC ROUTES (generic :id routes come LAST) ===
 
 // Log interaction (view/reply/reaction)
 router.post("/:id/log_interaction", auth, logInteraction);
@@ -73,12 +55,6 @@ router.get(
   auth,
   require("../controllers/storyController").checkMyLike
 );
-
-// Archive a story
-router.post("/:id/archive", auth, archiveStory);
-
-// Restore story from archive
-router.post("/:id/unarchive", auth, unarchiveStory);
 
 // delete a story (owner only)
 router.delete(

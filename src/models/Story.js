@@ -9,8 +9,6 @@ const StorySchema = new Schema(
     isPrivate: { type: Boolean, default: false },
     metadata: { type: Schema.Types.Mixed },
     expiresAt: { type: Date, required: true, index: true },
-    isArchived: { type: Boolean, default: false },
-    archivedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
